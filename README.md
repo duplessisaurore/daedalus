@@ -11,8 +11,24 @@
 </div>
 
 ## 🌌 Table of Contents
+- [<code>🪽 Capabilities</code>](#capabilities)
 - [<code>🧾 License</code>](#license)
 - [<code>🎓 Acknowledgments</code>](#acknowledgements)
+
+<a name="capabilities"></a>
+## 🪽 Capabilities
+
+There are a multitude of capabilities provided by `Daedalus` to the `Lepton3` VM for programs to communicate, and access hardware/memory.
+
+The first and one of the most important factors is that there is no pre-emption of programs in `Daedalus`, each program must be cooporative with eachother. Each program rests in one of two states: `Running` and `Blocked`. We will explore each one later as we go through the syscalls.
+
+The three fundamental syscalls in `Daedalus` are:
+
+### Call
+
+This will yield the current program, giving up its execution time and placing it in the `Blocked` state. This essentially allows one program to communicate with another by *calling* one of it's provided services under it's string name.
+
+The format of 
 
 <a name="license"></a>
 ## 🧾 License

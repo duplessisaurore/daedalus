@@ -1,0 +1,19 @@
+[package]
+name = "daedalus_service"
+version = "1.0.0"
+edition = "2024"
+authors = ["The Daedalus Contributors"]
+
+description = "A library that embeds daedalus services into the rust build process as a static array"
+readme = "README.md"
+
+repository = "https://github.com/duplessisaurore/daedalus"
+license = "AGPLv3"
+
+keywords = ["languages", "scripting", "script"]
+
+[dependencies]
+
+[build-dependencies]
+serde = { version = "1", features = ["derive"] }
+toml = "1"
