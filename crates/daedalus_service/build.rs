@@ -5,7 +5,7 @@ use serde::Deserialize;
 
 // These are the builtin services that are handled by the daedalus core rather
 // than a daedalus program.
-const BUILTIN_PROGRAMS: [&str; 2] = ["memory::write_mem_32", "memory::read_mem_32"];
+const BUILTIN_SERVICES: [&str; 2] = ["memory::write_mem_32", "memory::read_mem_32"];
 
 /// The parsed content of a Daedalus
 /// program manifest.
@@ -57,8 +57,8 @@ fn main() {
 
     // All referenced services, services provided must be a superset of required
     let mut required = HashSet::new();
-    let mut provided = HashSet::with_capacity(BUILTIN_PROGRAMS.len());
-    provided.extend(BUILTIN_PROGRAMS.map(String::from));
+    let mut provided = HashSet::with_capacity(BUILTIN_SERVICES.len());
+    provided.extend(BUILTIN_SERVICES.map(String::from));
 
     // The generated output will be the set of all programs described
     let mut output = String::from("pub static PROGRAMS: &[Program] = &[\n");
