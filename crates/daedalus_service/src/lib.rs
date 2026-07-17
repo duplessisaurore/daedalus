@@ -1,4 +1,4 @@
-//! `Daedalus` is an experimental open-source micro bootloader for 
+//! `Daedalus` is an experimental open-source micro bootloader for
 //! the LionsOS system developed ontop of seL4.
 //!
 //! Check out the [repository README](https://github.com/duplessisaurore/daedalus/blob/main/README.md)
@@ -14,7 +14,6 @@
 
 /// One Lepton3 daedalus program
 pub struct Program {
-
     // The name of the program, this is defined in the
     // "name" field of the manifest.toml
     pub name: &'static str,
