@@ -14,8 +14,22 @@
 #![feature(const_trait_impl)]
 #![no_std]
 
+use lepton3::lepton_image::image_trait::{LeptonImage, LeptonSourceLocation};
+
+/// A static source location with a static context
+/// that can be embedded as a struct literal easily
+pub struct StaticSourceLocation {
+    pub instruction_offset: u32,
+    pub file: u32,
+    pub line: u32,
+    pub column: u32,
+    pub context: &'static str,
+}
+
+pub trait StaticLeptonImage : LeptonImage<StaticSourceLocation, File = &'static str> {}
+
 /// One Lepton3 daedalus program
-pub struct Program {
+pub struct Program<Image: StaticLeptonImage + 'static> {
     // The name of the program, this is defined in the
     // "name" field of the manifest.toml
     pub name: &'static str,
@@ -26,14 +40,14 @@ pub struct Program {
     // These are the services this program requires to run
     pub requires: &'static [&'static str],
 
-    // The actual image bytes (lepton3) of this program
-    pub image: &'static [u8],
+    // The actual image (lepton3) of this program
+    pub image: &'static Image,
 }
 
 /// One Lepton3 daedalus phase
-pub struct Phase {
+pub struct Phase<Image: StaticLeptonImage + 'static> {
     // The program this phase is running
-    pub program: &'static Program,
+    pub program: &'static Program<Image>,
 
     // The name of the phase
     pub name: &'static str,
@@ -46,7 +60,26 @@ pub struct Phase {
 // from the daedalus program manifests
 include!(concat!(env!("OUT_DIR"), "/programs.rs"));
 
-/// Returns all the programs loaded into this image
-pub const fn all() -> &'static [Program] {
-    PROGRAMS
+impl LeptonSourceLocation for StaticSourceLocation {
+    type Context = &'static str;
+
+    fn instruction_offset(&self) -> u32 {
+        self.instruction_offset
+    }
+
+    fn file(&self) -> u32 {
+        self.file
+    }
+
+    fn line(&self) -> u32 {
+        self.line
+    }
+
+    fn column(&self) -> u32 {
+        self.column
+    }
+
+    fn context(&self) -> &Self::Context {
+        &self.context
+    }
 }

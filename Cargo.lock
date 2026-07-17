@@ -6,6 +6,7 @@ version = 4
 name = "daedalus_service"
 version = "1.0.0"
 dependencies = [
+ "lepton3",
  "serde",
  "toml",
 ]
@@ -30,6 +31,38 @@ checksum = "d466e9454f08e4a911e14806c24e16fba1b4c121d1ea474396f396069cf949d9"
 dependencies = [
  "equivalent",
  "hashbrown",
+]
+
+[[package]]
+name = "lepton3"
+version = "5.0.0"
+source = "git+https://github.com/duplessisaurore/lepton3#61e3c6715f90f793c456fdcc670b6ab0d5461814"
+dependencies = [
+ "lepton_image",
+ "lepton_opcodes",
+ "lepton_vm",
+]
+
+[[package]]
+name = "lepton_image"
+version = "2.2.0"
+source = "git+https://github.com/duplessisaurore/lepton3#61e3c6715f90f793c456fdcc670b6ab0d5461814"
+dependencies = [
+ "lepton_opcodes",
+]
+
+[[package]]
+name = "lepton_opcodes"
+version = "3.0.0"
+source = "git+https://github.com/duplessisaurore/lepton3#61e3c6715f90f793c456fdcc670b6ab0d5461814"
+
+[[package]]
+name = "lepton_vm"
+version = "5.0.0"
+source = "git+https://github.com/duplessisaurore/lepton3#61e3c6715f90f793c456fdcc670b6ab0d5461814"
+dependencies = [
+ "lepton_image",
+ "lepton_opcodes",
 ]
 
 [[package]]

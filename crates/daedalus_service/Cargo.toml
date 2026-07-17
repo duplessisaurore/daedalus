@@ -13,6 +13,7 @@ license = "AGPLv3"
 keywords = ["languages", "scripting", "script"]
 
 [dependencies]
+lepton3 = { workspace = true }
 
 [build-dependencies]
 serde = { version = "1", features = ["derive"] }

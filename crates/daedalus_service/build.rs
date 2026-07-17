@@ -107,7 +107,7 @@ fn main() {
     provided.extend(BUILTIN_SERVICES.map(String::from));
 
     // The generated output will be the set of all programs described
-    let mut output = String::from("pub static PROGRAMS: &[Program] = &[\n");
+    let mut output = String::from("pub static PROGRAMS: &[Program<impl StaticLeptonImage>] = &[\n");
 
     for entry in entries {
         let entry_path = PathBuf::from(entry);
@@ -201,7 +201,7 @@ fn main() {
     output.push_str(&format!(
         "
         /// Looks up an embedded program by name
-        pub const fn get(name: &str) -> Option<&'static Program> {{
+        pub const fn get(name: &str) -> Option<&'static Program<impl StaticLeptonImage>> {{
             match name {{
                 {}
                 _ => None,
