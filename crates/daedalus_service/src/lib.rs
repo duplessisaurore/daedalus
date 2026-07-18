@@ -22,6 +22,7 @@ use lepton3::lepton_image::{
 
 /// A static source location with a static context
 /// that can be embedded as a struct literal easily
+#[derive(Debug)]
 pub struct StaticSourceLocation {
     pub instruction_offset: u32,
     pub file: u32,
