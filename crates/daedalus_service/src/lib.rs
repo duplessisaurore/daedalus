@@ -14,7 +14,11 @@
 #![feature(const_trait_impl)]
 #![no_std]
 
-use lepton3::lepton_image::image_trait::{LeptonImage, LeptonSourceLocation};
+use lepton3::lepton_image::{image_trait::{LeptonImage, LeptonSourceLocation}, flags::ImageFlags, format::{
+    Function,
+    ObjectType,
+    Header
+}};
 
 /// A static source location with a static context
 /// that can be embedded as a struct literal easily

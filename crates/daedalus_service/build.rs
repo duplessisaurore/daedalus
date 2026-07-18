@@ -1,6 +1,7 @@
 use std::fmt::Write;
 use std::{collections::HashSet, env, fs, path::PathBuf};
 
+use lepton3::{parser, validator};
 use serde::Deserialize;
 
 // These are the builtin services that are handled by the daedalus core rather
@@ -58,6 +59,218 @@ struct Phase {
     pub program: String,
 }
 
+/// Writes out the image in a static format for a program
+/// directly into a rust struct.
+///
+/// Will panic on any error associated with parsing, validating
+/// or writing out the image.
+///
+/// This returns a struct literal constructor in a string form
+/// that constructs the struct
+fn write_out_image(name: &String, image_path: PathBuf, out: &mut String) -> String {
+    // Read all the bytes from the image path
+    let bytes = fs::read(&image_path).unwrap_or_else(|e| {
+        panic!("\x1b[93merror reading {}: {e}\x1b[0m", image_path.display());
+    });
+
+    // Parse the image from the bytes.
+    let image = parser::parse(&bytes).unwrap_or_else(|e| {
+        panic!(
+            "\x1b[93merror parsing image {}: {e}\x1b[0m",
+            image_path.display()
+        );
+    });
+
+    // Validate the file to ensure it's validity
+    validator::validate(&image).unwrap_or_else(|e| {
+        panic!(
+            "\x1b[93merror validating image {}: {e}\x1b[0m",
+            image_path.display()
+        );
+    });
+
+    // The name of the produced struct
+    let struct_name = format!("{}Image", name.to_uppercase());
+
+    // Number of each elements in the debug section of the image
+    let debug_files = image
+        .debug_info
+        .as_ref()
+        .map(|debug_info| debug_info.files.len())
+        .unwrap_or(0);
+    let debug_locations = image
+        .debug_info
+        .as_ref()
+        .map(|debug_info| debug_info.locations.len())
+        .unwrap_or(0);
+
+    // Number of elements in each table of the image
+    let object_table_size = image.object_table.len();
+    let function_table_size = image.function_table.len();
+    let instructions_len = image.instructions.len();
+
+    // Write out the struct for this image's image.
+    writeln!(
+        out,
+        "
+        pub struct {struct_name}DebugInfo {{
+            pub files: [&'static str; {debug_files}],
+            pub locations: [StaticSourceLocation; {debug_locations}]
+        }}
+
+        pub struct {struct_name} {{
+            pub header: Header,
+            pub object_table: [ObjectType; {object_table_size}],
+            pub function_table: [Function; {function_table_size}],
+            pub instructions: &'static [u8; {instructions_len}],
+            pub debug_info: Option<{struct_name}DebugInfo>,
+        }}
+        
+        /// We need this to implement the LeptonImage trait for
+        /// it to be a valid lepton3 image that we can use in the VM
+        impl LeptonImage<StaticSourceLocation> for {struct_name} {{
+            type File = &'static str;
+
+            fn header(&self) -> &Header {{
+                &self.header
+            }}
+
+            fn object_table(&self) -> &[ObjectType] {{
+                &self.object_table
+            }}
+
+            fn function_table(&self) -> &[Function] {{
+                &self.function_table
+            }}
+
+            fn instructions(&self) -> &[u8] {{
+                self.instructions
+            }}
+
+            fn files(&self) -> Option<&[Self::File]> {{
+                self.debug_info.as_ref().map(|debug_info| &debug_info.files[..])
+            }}
+
+            fn locations(&self) -> Option<&[StaticSourceLocation]> {{
+                self.debug_info.as_ref().map(|debug_info| &debug_info.locations[..])
+            }}
+        }}
+
+        impl StaticLeptonImage for {struct_name} {{}}
+        ",
+    )
+    .unwrap();
+
+    // Write out the object table as a array literal
+    let mut object_table_literal = String::from("[");
+    for object in image.object_table {
+        // Write out the object literal.
+        writeln!(
+            object_table_literal,
+            "
+            ObjectType {{
+                field_count: {}
+            }},",
+            object.field_count
+        )
+        .unwrap();
+    }
+    object_table_literal.push_str("]");
+
+    // Write out the function table as an array literal
+    let mut function_table_literal = String::from("[");
+    for function in image.function_table {
+        // Write out the function literal.
+        writeln!(
+            function_table_literal,
+            "
+            Function {{
+                arg_count: {},
+                local_count: {},
+                instruction_offset: {},
+                instruction_length: {},
+            }},",
+            function.arg_count,
+            function.local_count,
+            function.instruction_offset,
+            function.instruction_length
+        )
+        .unwrap();
+    }
+    function_table_literal.push_str("]");
+
+    // We re-write out the instructions so we don't need to manually write out each u8 byte of the instructions.
+    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let instructions = out_dir.join(format!("image_{struct_name}"));
+
+    fs::write(&instructions, image.instructions.as_slice()).unwrap();
+
+    // Write out the debug info literal as part of this construction
+    let mut debug_info_literal = String::from("None,");
+    if let Some(debug_info) = image.debug_info {
+        // Write out the file table.
+        let mut file_table_literal = String::from("[");
+        for file in debug_info.files {
+            // Write out the file literal.
+            writeln!(file_table_literal, "{:?},", file).unwrap();
+        }
+        file_table_literal.push_str("]");
+
+        // Write out the source locations table.
+        let mut source_locations_literal = String::from("[");
+        for location in debug_info.locations {
+            // Write out the source location literal.
+            writeln!(
+                source_locations_literal,
+                "StaticSourceLocation {{
+                    instruction_offset: {},
+                    file: {},
+                    line: {},
+                    column: {},
+                    context: {:?},
+                }},",
+                location.instruction_offset,
+                location.file,
+                location.line,
+                location.column,
+                location.context
+            )
+            .unwrap();
+        }
+        source_locations_literal.push_str("]");
+
+        debug_info_literal = format!(
+            "
+            Some(
+                {struct_name}DebugInfo {{
+                    files: {file_table_literal},
+                    locations: {source_locations_literal}
+                }}
+            )
+        "
+        )
+    };
+
+    // Return the constructor literal
+    format!(
+        "
+        {struct_name} {{
+            header: Header {{
+                version_major: {},
+                flags: ImageFlags::from_raw({}),
+                entry_point: {},
+            }},
+            object_table: {object_table_literal},
+            function_table: {function_table_literal},
+            instructions: include_bytes!({instructions:?}),
+            debug_info: {debug_info_literal},
+        }}",
+        image.header.version_major,
+        image.header.flags.to_raw(),
+        image.header.entry_point
+    )
+}
+
 fn main() {
     // Daedalus programs if the environment variable is changed needs to rerun
     println!("cargo:rerun-if-env-changed=DAEDALUS_PROGRAMS");
@@ -106,6 +319,9 @@ fn main() {
     let mut provided = HashSet::with_capacity(BUILTIN_SERVICES.len());
     provided.extend(BUILTIN_SERVICES.map(String::from));
 
+    // This is the buf for the static image structs
+    let mut image_structs_out = String::new();
+
     // The generated output will be the set of all programs described
     let mut output = String::from("pub static PROGRAMS: &[Program<impl StaticLeptonImage>] = &[\n");
 
@@ -141,6 +357,9 @@ fn main() {
         // If the image changes we need to rebuild
         println!("cargo:rerun-if-changed={}", image_path.display());
 
+        // Write out the image struct
+        let image_literal = write_out_image(&manifest.name, image_path, &mut image_structs_out);
+
         // Update the output with our included program
         writeln!(
             output,
@@ -148,7 +367,7 @@ fn main() {
         name: {:?},
         services: &[{}],
         requires: &[{}],
-        image: include_bytes!({:?}),
+        image: &{},
     }},",
             manifest.name,
             manifest
@@ -163,7 +382,7 @@ fn main() {
                 .map(|elem| format!("\"{}\"", elem))
                 .collect::<Vec<_>>()
                 .join(","),
-            image_path,
+            image_literal
         )
         .unwrap();
 
@@ -187,6 +406,7 @@ fn main() {
     }
 
     output.push_str("];\n");
+    output.extend(image_structs_out.chars());
 
     // Build match arms for the const lookup of programs
     let mut arms = String::new();
