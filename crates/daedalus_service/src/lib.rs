@@ -14,11 +14,11 @@
 #![feature(const_trait_impl)]
 #![no_std]
 
-use lepton3::lepton_image::{image_trait::{LeptonImage, LeptonSourceLocation}, flags::ImageFlags, format::{
-    Function,
-    ObjectType,
-    Header
-}};
+use lepton3::lepton_image::{
+    flags::ImageFlags,
+    format::{Function, Header, ObjectType},
+    image_trait::{LeptonImage, LeptonSourceLocation},
+};
 
 /// A static source location with a static context
 /// that can be embedded as a struct literal easily
@@ -30,7 +30,7 @@ pub struct StaticSourceLocation {
     pub context: &'static str,
 }
 
-pub trait StaticLeptonImage : LeptonImage<StaticSourceLocation, File = &'static str> {}
+pub trait StaticLeptonImage: LeptonImage<StaticSourceLocation, File = &'static str> {}
 
 /// One Lepton3 daedalus program
 pub struct Program<Image: StaticLeptonImage + 'static> {

@@ -59,6 +59,26 @@ struct Phase {
     pub program: String,
 }
 
+/// Converts the name to it's Image struct name
+pub fn to_image_struct_name(name: &str) -> String {
+    format!("{}Image", name.to_uppercase())
+}
+
+/// Converts the name to it's PROGRAM const name
+pub fn to_program_const_name(name: &str) -> String {
+    format!("{}_PROGRAM", name.to_uppercase())
+}
+
+/// Converts the name to it's debug info struct name
+pub fn to_debug_struct_name(name: &str) -> String {
+    format!("{}DebugInfo", to_image_struct_name(name))
+}
+
+/// Converts the name to it's PHASE const name
+pub fn to_phase_const_name(name: &str) -> String {
+    format!("{}_PHASE", name.to_uppercase())
+}
+
 /// Writes out the image in a static format for a program
 /// directly into a rust struct.
 ///
@@ -67,7 +87,7 @@ struct Phase {
 ///
 /// This returns a struct literal constructor in a string form
 /// that constructs the struct
-fn write_out_image(name: &String, image_path: PathBuf, out: &mut String) -> String {
+fn write_out_image(name: &str, image_path: PathBuf, out: &mut String) -> String {
     // Read all the bytes from the image path
     let bytes = fs::read(&image_path).unwrap_or_else(|e| {
         panic!("\x1b[93merror reading {}: {e}\x1b[0m", image_path.display());
@@ -90,7 +110,8 @@ fn write_out_image(name: &String, image_path: PathBuf, out: &mut String) -> Stri
     });
 
     // The name of the produced struct
-    let struct_name = format!("{}Image", name.to_uppercase());
+    let struct_name = to_image_struct_name(name);
+    let debug_struct_name = to_debug_struct_name(name);
 
     // Number of each elements in the debug section of the image
     let debug_files = image
@@ -113,7 +134,7 @@ fn write_out_image(name: &String, image_path: PathBuf, out: &mut String) -> Stri
     writeln!(
         out,
         "
-        pub struct {struct_name}DebugInfo {{
+        pub struct {debug_struct_name} {{
             pub files: [&'static str; {debug_files}],
             pub locations: [StaticSourceLocation; {debug_locations}]
         }}
@@ -123,7 +144,7 @@ fn write_out_image(name: &String, image_path: PathBuf, out: &mut String) -> Stri
             pub object_table: [ObjectType; {object_table_size}],
             pub function_table: [Function; {function_table_size}],
             pub instructions: &'static [u8; {instructions_len}],
-            pub debug_info: Option<{struct_name}DebugInfo>,
+            pub debug_info: Option<{debug_struct_name}>,
         }}
         
         /// We need this to implement the LeptonImage trait for
@@ -175,7 +196,7 @@ fn write_out_image(name: &String, image_path: PathBuf, out: &mut String) -> Stri
         )
         .unwrap();
     }
-    object_table_literal.push_str("]");
+    object_table_literal.push(']');
 
     // Write out the function table as an array literal
     let mut function_table_literal = String::from("[");
@@ -197,7 +218,7 @@ fn write_out_image(name: &String, image_path: PathBuf, out: &mut String) -> Stri
         )
         .unwrap();
     }
-    function_table_literal.push_str("]");
+    function_table_literal.push(']');
 
     // We re-write out the instructions so we don't need to manually write out each u8 byte of the instructions.
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
@@ -214,7 +235,7 @@ fn write_out_image(name: &String, image_path: PathBuf, out: &mut String) -> Stri
             // Write out the file literal.
             writeln!(file_table_literal, "{:?},", file).unwrap();
         }
-        file_table_literal.push_str("]");
+        file_table_literal.push(']');
 
         // Write out the source locations table.
         let mut source_locations_literal = String::from("[");
@@ -237,12 +258,12 @@ fn write_out_image(name: &String, image_path: PathBuf, out: &mut String) -> Stri
             )
             .unwrap();
         }
-        source_locations_literal.push_str("]");
+        source_locations_literal.push(']');
 
         debug_info_literal = format!(
             "
             Some(
-                {struct_name}DebugInfo {{
+                {debug_struct_name} {{
                     files: {file_table_literal},
                     locations: {source_locations_literal}
                 }}
@@ -311,9 +332,6 @@ fn main() {
     // The seen set of names, a duplicate program name is not permitted
     let mut seen = HashSet::new();
 
-    // Names with insertion order preserved.
-    let mut ordered_names = Vec::new();
-
     // All referenced services, services provided must be a superset of required
     let mut required = HashSet::new();
     let mut provided = HashSet::with_capacity(BUILTIN_SERVICES.len());
@@ -323,7 +341,8 @@ fn main() {
     let mut image_structs_out = String::new();
 
     // The generated output will be the set of all programs described
-    let mut output = String::from("pub static PROGRAMS: &[Program<impl StaticLeptonImage>] = &[\n");
+    // with each program being some Program<impl StaticLeptonImage> as a const.
+    let mut output = String::new();
 
     for entry in entries {
         let entry_path = PathBuf::from(entry);
@@ -342,7 +361,14 @@ fn main() {
         if !seen.insert(manifest.name.clone()) {
             panic!("\x1b[93mduplicate program name `{}`\x1b[0m", manifest.name);
         }
-        ordered_names.push(manifest.name.clone());
+
+        // An invalid name is one that isn't purely ascii isn't permitted.
+        if !manifest.name.is_ascii() || manifest.name.is_empty() {
+            panic!(
+                "\x1b[93minvalid non-ascii or empty program name `{}`\x1b[0m",
+                manifest.name
+            );
+        }
 
         // The generated include_bytes! for the image to include it as part of our full bootloader image
         let image_path = entry_path.parent().unwrap().join(&manifest.image);
@@ -360,15 +386,19 @@ fn main() {
         // Write out the image struct
         let image_literal = write_out_image(&manifest.name, image_path, &mut image_structs_out);
 
+        // The name of the produced program & struct
+        let program_name = to_program_const_name(&manifest.name);
+        let struct_name = to_image_struct_name(&manifest.name);
+
         // Update the output with our included program
         writeln!(
             output,
-            "    Program {{
+            "static {program_name}: &'static Program<{struct_name}> = &Program {{
         name: {:?},
         services: &[{}],
         requires: &[{}],
         image: &{},
-    }},",
+    }};",
             manifest.name,
             manifest
                 .services
@@ -405,23 +435,23 @@ fn main() {
         )
     }
 
-    output.push_str("];\n");
-    output.extend(image_structs_out.chars());
+    output.push_str(&image_structs_out);
 
     // Build match arms for the const lookup of programs
     let mut arms = String::new();
-
-    // The same order we pushed the programs, we need to retrieve with the match
-    // for const support in our generated code
-    for (iter, entry) in ordered_names.iter().enumerate() {
-        arms.push_str(&format!("{:?} => Some(&PROGRAMS[{}]),", entry, iter));
+    for name in seen.iter() {
+        arms.push_str(&format!(
+            "{:?} => Some({}),",
+            name,
+            to_program_const_name(name)
+        ));
     }
 
     // Generate the get match statement for the programs
     output.push_str(&format!(
         "
         /// Looks up an embedded program by name
-        pub const fn get(name: &str) -> Option<&'static Program<impl StaticLeptonImage>> {{
+        pub const fn get_program(name: &str) -> Option<&'static Program<impl StaticLeptonImage>> {{
             match name {{
                 {}
                 _ => None,
@@ -440,20 +470,14 @@ fn main() {
 
     println!("cargo:rerun-if-env-changed={}", template_file);
 
-    // The template will output a vec of `Phase`'s.
-
     // Duplicate phase names are not permitted
     let mut seen_phases = HashSet::new();
-    let mut ordered_phases: Vec<String> = Vec::new();
 
     // All referenced programs, programs provided must all exist
     let mut required_programs = HashSet::new();
 
     // All required phases for proper running
     let mut required_phases = HashSet::new();
-
-    // The generated output will be the set of all phases described
-    output.push_str("pub static PHASES: &[Phase] = &[\n");
 
     for phase in template.phases {
         // If we have a duplicate name this isn't allowed as those phases would conflict
@@ -463,17 +487,29 @@ fn main() {
                 phase.name
             );
         }
-        ordered_phases.push(phase.name.clone());
+
+        // An invalid name is one that isn't purely ascii isn't permitted.
+        if !phase.name.is_ascii() || phase.name.is_empty() {
+            panic!(
+                "\x1b[93minvalid non-ascii or empty daedalus phase name `{}`\x1b[0m",
+                phase.name
+            );
+        }
+
+        // The name of the produced phase const
+        let phase_name = to_phase_const_name(&phase.name);
+        let struct_name = to_image_struct_name(&phase.program);
+        let program_name = to_program_const_name(&phase.program);
 
         // Update the output with our included phase
         writeln!(
             output,
-            "    Phase {{
+            "static {phase_name}: &'static Phase<{struct_name}> = &Phase {{
         name: {:?},
-        program: &get({:?}).unwrap(),
+        program: {program_name},
         next: {:?},
-    }},",
-            phase.name, phase.program, phase.next
+    }};",
+            phase.name, phase.next
         )
         .unwrap();
 
@@ -484,22 +520,41 @@ fn main() {
         required_programs.insert(phase.program);
     }
 
-    output.push_str("];\n");
+    output.push('\n');
 
     // The entry must exist in the set of phases
     if !seen_phases.contains(&template.entry) {
         panic!("\x1b[93mmissing entry phase `{:?}`\x1b[0m", template.entry)
     }
 
-    // Write the entry out as a reference to the programs
+    // Build match arms for the const lookup of phases
+    let mut arms = String::new();
+    for name in seen_phases.iter() {
+        arms.push_str(&format!(
+            "{:?} => Some({}),",
+            name,
+            to_phase_const_name(name)
+        ));
+    }
+
+    // Generate the get match statement for the phases
     output.push_str(&format!(
-        "pub static ENTRY: &'static Phase = &PHASES[{}];",
-        ordered_phases
-            .iter()
-            .enumerate()
-            .find(|phase| phase.1.as_str() == template.entry)
-            .unwrap()
-            .0
+        "
+        /// Looks up an embedded phase by name
+        pub const fn get_phase(name: &str) -> Option<&'static Phase<impl StaticLeptonImage>> {{
+            match name {{
+                {}
+                _ => None,
+            }}
+        }}
+    ",
+        arms
+    ));
+
+    // Write the entry out as a reference to the phases
+    output.push_str(&format!(
+        "pub const fn get_entry_phase() -> &'static Phase<impl StaticLeptonImage> {{ get_phase({:?}).unwrap() }}",
+        template.entry
     ));
 
     fs::write(&out_file, output).unwrap();
