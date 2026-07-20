@@ -7,3 +7,4 @@ resolver = "3"
 
 [workspace.dependencies]
 lepton3 = { git = "https://github.com/duplessisaurore/lepton3" }
+daedalus_service = { path = "./crates/daedalus_service" }

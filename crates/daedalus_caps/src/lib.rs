@@ -18,3 +18,7 @@ extern crate alloc;
 // to another heap allocator to permit for capability
 // calls with heap values.
 pub mod migrate;
+
+// Programs abstraction, essentially one VM instance
+// that we can swap between
+pub mod program;
