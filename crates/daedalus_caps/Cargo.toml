@@ -1,0 +1,17 @@
+[package]
+name = "daedalus_caps"
+version = "1.0.0"
+edition = "2024"
+authors = ["The Daedalus Contributors"]
+
+description = "Per-platform capability set for Lepton3 for the daedalus bootloader environment"
+readme = "README.md"
+
+repository = "https://github.com/duplessisaurore/daedalus"
+license = "AGPLv3"
+
+keywords = ["languages", "scripting", "script"]
+
+[dependencies]
+hashbrown = "0.17.1"
+lepton3 = { workspace = true }

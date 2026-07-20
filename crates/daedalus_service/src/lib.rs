@@ -7,8 +7,8 @@
 //! ## Daedalus Service
 //!
 //! The `daedalus_service` crate provides a library combined with a build
-//! script that embeds daedalus programs into a slice of `Programs` provided
-//! to the bootloader
+//! script that embeds daedalus programs into the bootloader binary as pre-parsed
+//! and validated rust structs.
 
 #![feature(const_cmp)]
 #![feature(const_trait_impl)]

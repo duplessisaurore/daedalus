@@ -1,3 +1,8 @@
+//! This build script reads daedalus programs and outputs them
+//! under a programs.rs with the daedalus programs & daedalus manifest
+//! generated as rust structs that can then be embedded into daedalus
+//! itself through the `daedalus_service` crate.
+
 use std::fmt::Write;
 use std::{collections::HashSet, env, fs, path::PathBuf};
 
