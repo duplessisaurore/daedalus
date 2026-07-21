@@ -61,8 +61,8 @@ dependencies = [
 
 [[package]]
 name = "lepton3"
-version = "8.1.0"
-source = "git+https://github.com/duplessisaurore/lepton3#9dc50191e2391eba9eb31b64ca2a3374408d4f9e"
+version = "9.1.2"
+source = "git+https://github.com/duplessisaurore/lepton3#5ca443e319330665783373f6f090d9aa44262de3"
 dependencies = [
  "lepton_image",
  "lepton_opcodes",
@@ -72,7 +72,7 @@ dependencies = [
 [[package]]
 name = "lepton_image"
 version = "2.3.0"
-source = "git+https://github.com/duplessisaurore/lepton3#9dc50191e2391eba9eb31b64ca2a3374408d4f9e"
+source = "git+https://github.com/duplessisaurore/lepton3#5ca443e319330665783373f6f090d9aa44262de3"
 dependencies = [
  "lepton_opcodes",
 ]
@@ -80,12 +80,12 @@ dependencies = [
 [[package]]
 name = "lepton_opcodes"
 version = "3.0.0"
-source = "git+https://github.com/duplessisaurore/lepton3#9dc50191e2391eba9eb31b64ca2a3374408d4f9e"
+source = "git+https://github.com/duplessisaurore/lepton3#5ca443e319330665783373f6f090d9aa44262de3"
 
 [[package]]
 name = "lepton_vm"
-version = "8.1.0"
-source = "git+https://github.com/duplessisaurore/lepton3#9dc50191e2391eba9eb31b64ca2a3374408d4f9e"
+version = "9.1.2"
+source = "git+https://github.com/duplessisaurore/lepton3#5ca443e319330665783373f6f090d9aa44262de3"
 dependencies = [
  "lepton_image",
  "lepton_opcodes",
@@ -150,9 +150,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "3.0.1"
+version = "3.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5edbec4ed188954a10c12c038215f8ce7606b2d5c973cd8dc43e8795065c5f2f"
+checksum = "a207d6d6a2b7fc470b80443726053f18a2481b7e1eee970597051596567987a3"
 dependencies = [
  "proc-macro2",
  "quote",

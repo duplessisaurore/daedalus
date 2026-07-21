@@ -181,8 +181,6 @@ fn write_out_image(name: &str, image_path: PathBuf, out: &mut String) -> String 
                 self.debug_info.as_ref().map(|debug_info| &debug_info.locations[..])
             }}
         }}
-
-        impl StaticLeptonImage for {struct_name} {{}}
         ",
     )
     .unwrap();
@@ -346,7 +344,7 @@ fn main() {
     let mut image_structs_out = String::new();
 
     // The generated output will be the set of all programs described
-    // with each program being some Program<impl StaticLeptonImage> as a const.
+    // with each program being some Program<StaticDaedalusImageVariants> as a const.
     let mut output = String::new();
 
     for entry in entries {
@@ -398,12 +396,12 @@ fn main() {
         // Update the output with our included program
         writeln!(
             output,
-            "static {program_name}: &'static Program<{struct_name}> = &Program {{
+            "static {program_name}: &'static Program<StaticDaedalusImageVariants> = &Program {{
         name: {:?},
         services: &[{}],
         requires: &[{}],
-        image: &{},
-    }};",
+        image: &StaticDaedalusImageVariants::{struct_name}(&{}),
+        }};",
             manifest.name,
             manifest
                 .services
@@ -442,6 +440,90 @@ fn main() {
 
     output.push_str(&image_structs_out);
 
+    // Build enum arms for the enum image of programs
+    let mut enum_variants = String::new();
+    for name in seen.iter() {
+        enum_variants.push_str(&format!(
+            "{}(&'static {}),",
+            to_image_struct_name(name),
+            to_image_struct_name(name)
+        ));
+    }
+
+    // Build enum arms for the enum method calling of programs
+    // for the LeptonImage trait
+    let enum_method_builder = |method: &'static str| {
+        let mut enum_match_arms = String::new();
+        for name in seen.iter() {
+            enum_match_arms.push_str(&format!(
+                "StaticDaedalusImageVariants::{}(image_variant) => image_variant.{},",
+                to_image_struct_name(name),
+                method
+            ));
+        }
+
+        enum_match_arms
+    };
+
+
+    output.push_str(&format!(
+        "
+        /// The enum variant of all images because they're all one
+        /// constant static type
+        pub enum StaticDaedalusImageVariants {{
+            {enum_variants}  
+        }}
+
+        impl LeptonImage<StaticSourceLocation> for StaticDaedalusImageVariants {{
+            type File = &'static str;
+
+            fn header(&self) -> &Header {{
+                match &self {{
+                    {}
+                }}
+            }}
+
+            fn object_table(&self) -> &[ObjectType] {{
+                match &self {{
+                    {}
+                }}
+            }}
+
+            fn function_table(&self) -> &[Function] {{
+                match &self {{
+                    {}
+                }}
+            }}
+
+            fn instructions(&self) -> &[u8] {{
+                match &self {{
+                    {}
+                }}
+            }}
+
+            fn files(&self) -> Option<&[Self::File]> {{
+                match &self {{
+                    {}
+                }}
+            }}
+
+            fn locations(&self) -> Option<&[StaticSourceLocation]> {{
+                match &self {{
+                    {}
+                }}
+            }}
+        }}
+
+        impl StaticLeptonImage for StaticDaedalusImageVariants {{}}
+        ",
+        enum_method_builder("header()"),
+        enum_method_builder("object_table()"),
+        enum_method_builder("function_table()"),
+        enum_method_builder("instructions()"),
+        enum_method_builder("files()"),
+        enum_method_builder("locations()"),
+    ));
+
     // Build match arms for the const lookup of programs
     let mut arms = String::new();
     for name in seen.iter() {
@@ -456,7 +538,7 @@ fn main() {
     output.push_str(&format!(
         "
         /// Looks up an embedded program by name
-        pub const fn get_program(name: &str) -> Option<&'static Program<impl StaticLeptonImage>> {{
+        pub const fn get_program(name: &str) -> Option<&'static Program<StaticDaedalusImageVariants>> {{
             match name {{
                 {}
                 _ => None,
@@ -503,13 +585,12 @@ fn main() {
 
         // The name of the produced phase const
         let phase_name = to_phase_const_name(&phase.name);
-        let struct_name = to_image_struct_name(&phase.program);
         let program_name = to_program_const_name(&phase.program);
 
         // Update the output with our included phase
         writeln!(
             output,
-            "static {phase_name}: &'static Phase<{struct_name}> = &Phase {{
+            "static {phase_name}: &'static Phase<StaticDaedalusImageVariants> = &Phase {{
         name: {:?},
         program: {program_name},
         next: {:?},
@@ -532,6 +613,15 @@ fn main() {
         panic!("\x1b[93mmissing entry phase `{:?}`\x1b[0m", template.entry)
     }
 
+    // The programs must exist in the set of programs
+    if !seen.is_superset(&required_programs) {
+        panic!(
+            "\x1b[93mmissing required program `{:?}`: these were not provided by any referenced daedalus programs\n\nprovided programs: {:?}\x1b[0m",
+            required_programs.difference(&seen),
+            seen
+        )
+    }
+
     // Build match arms for the const lookup of phases
     let mut arms = String::new();
     for name in seen_phases.iter() {
@@ -546,7 +636,7 @@ fn main() {
     output.push_str(&format!(
         "
         /// Looks up an embedded phase by name
-        pub const fn get_phase(name: &str) -> Option<&'static Phase<impl StaticLeptonImage>> {{
+        pub const fn get_phase(name: &str) -> Option<&'static Phase<StaticDaedalusImageVariants>> {{
             match name {{
                 {}
                 _ => None,
@@ -558,7 +648,7 @@ fn main() {
 
     // Write the entry out as a reference to the phases
     output.push_str(&format!(
-        "pub const fn get_entry_phase() -> &'static Phase<impl StaticLeptonImage> {{ get_phase({:?}).unwrap() }}",
+        "pub const fn get_entry_phase() -> &'static Phase<StaticDaedalusImageVariants> {{ get_phase({:?}).unwrap() }}",
         template.entry
     ));
 

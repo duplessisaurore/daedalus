@@ -1,6 +1,6 @@
 {
     "rust-analyzer.cargo.extraEnv": {
-        "DAEDALUS_PROGRAMS": "/home/aurora/bootloader/services/uart copy/daedalus.toml",
+        "DAEDALUS_PROGRAMS": "/home/aurora/bootloader/services/uart/daedalus.toml, /home/aurora/bootloader/services/uart2/daedalus.toml",
         "DAEDALUS_TEMPLATE": "/home/aurora/bootloader/services/phases.toml"
     }
 }
