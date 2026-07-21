@@ -2,34 +2,55 @@
 //! the state management for the VM to move data
 //! between programs.
 
-use alloc::vec::Vec;
-use daedalus_service::{Phase, StaticDaedalusImageVariants, StaticLeptonImage, StaticSourceLocation};
-use hashbrown::HashMap;
+use alloc::{collections::vec_deque::VecDeque, vec::Vec};
+use daedalus_service::{
+    Phase, StaticDaedalusImageVariants, StaticLeptonImage, StaticSourceLocation,
+};
+use hashbrown::{HashMap, hash_map::Entry};
 use lepton3::{
-    HeapAllocatorImpl, TagGeneratorImpl, VirtualMachine, lepton_vm::{
+    HeapAllocatorImpl, TagGeneratorImpl, VirtualMachine,
+    lepton_vm::{
         heap_allocator::HeapAllocator,
         tagger::TagGenerator,
-        values::{TypeTags, Value},
+        values::{Tag, TypeTags, Value},
         virtual_machine::{CallFrame, ErrorHandler},
     },
 };
 
+/// A unique call's Tag which associates a reply back
+/// to some program
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone, Copy)]
+pub struct CallTag(Tag);
+
+/// A request sitting in the inbox of a program, waiting
+/// to be recieved (see `inbox` in `DaedalusState`)
+pub struct Message {
+    /// The unique call tag associated with this new message
+    /// to the inbox so the receiever can reply
+    pub tag: CallTag,
+
+    /// The argument the caller passed
+    pub args: Value,
+}
+
 /// The current state of an inactive program.
-/// 
+///
 /// This decides whether or not this program can
-/// be ran
+/// be ran and the condition that's blocking it.
 #[derive(Debug, Hash, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ProgramState {
-    /// Blocked, this program is waiting for an event
-    /// to return to it or an event to be recieved
-    Blocked,
+    /// Blocked, but waiting for a `recv` that can
+    /// potentially wake it up.
+    BlockedOnRecv,
+
+    /// This program is blocked and is waiting for a `reply`
+    /// on one of it's calls to a different program
+    BlockedOnReply { tag: Tag },
 
     /// Ready, this program can execute and is waiting
     /// to be picked up
-    Ready
-
-    // Running is not here since the current VM program
-    // is the running one.
+    Ready, // Running is not here since the current VM program
+           // is the running one.
 }
 
 /// An inactive program, this has some state
@@ -40,6 +61,13 @@ pub struct InactiveProgram<
     H: HeapAllocator = HeapAllocatorImpl,
     T: TagGenerator = TagGeneratorImpl,
 > {
+    /// The current inactivity state of the program.
+    ///
+    /// This is essentially the three-state program model
+    /// but without running (as if it was running it wouldn't
+    /// be an `InactiveProgram`)
+    pub state: ProgramState,
+
     // The image of this program which we should be
     // executing when this program is active
     pub image: &'static I,
@@ -64,6 +92,19 @@ pub struct InactiveProgram<
 
     // Pre-allocated well-known type tags.
     pub type_tags: TypeTags,
+
+    /// Pending replies for the inactive program
+    ///
+    /// This is a map of the tag allocated for its calls back to the
+    /// program's name that called it
+    pub pending_replies: HashMap<CallTag, &'static str>,
+
+    /// Pending messages to the inactive program
+    ///
+    /// This is because a program can yield without
+    /// necessarily having to recv a message, say
+    /// calling something else too
+    pub inbox: VecDeque<Message>,
 }
 
 pub trait ProgramSwappable<H: HeapAllocator = HeapAllocatorImpl, T: TagGenerator = TagGeneratorImpl>
@@ -73,12 +114,14 @@ pub trait ProgramSwappable<H: HeapAllocator = HeapAllocatorImpl, T: TagGenerator
     ///
     /// The previously executing program, now replaced should have its
     /// state stored in the `InactiveProgram` that is outputted by the `swap`.
-    /// 
-    /// The program state should persist.
+    ///
+    /// The program state passed in is the new program state of the previously
+    /// running program that is returned
     #[must_use]
     fn swap(
         &mut self,
         program: InactiveProgram<StaticDaedalusImageVariants, H, T>,
+        new_state: ProgramState,
     ) -> InactiveProgram<StaticDaedalusImageVariants, H, T>;
 }
 
@@ -88,18 +131,21 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
     ///
     /// This essentially constructs a new VM from the `StaticLeptonImage`
     /// and then steals all of its initial state to create the program.
-    /// 
+    ///
     /// This program starts in the `Ready` state.
     #[must_use]
     pub fn from_image(image: &'static I) -> Self {
         let mut initial_machine_state =
             VirtualMachine::new(image, Vec::new(), H::default(), T::default(), ());
 
-        // Call the entry point, this should succeed...
+        // Call the entry point in the new image, this should succeed...
         let entry = image.header().entry_point as usize;
-        initial_machine_state.call_function(entry, 0).expect("expects entering the entry point to succeed");
+        initial_machine_state
+            .call_function(entry, 0)
+            .expect("expects entering the entry point to succeed");
 
         Self {
+            state: ProgramState::Ready,
             image,
             stack: initial_machine_state.stack,
             heap: initial_machine_state.heap,
@@ -108,20 +154,31 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
             error_handlers: initial_machine_state.error_handlers,
             globals: initial_machine_state.globals,
             type_tags: initial_machine_state.type_tags,
+            pending_replies: HashMap::new(),
+            inbox: VecDeque::new(),
         }
     }
 }
 
-impl<CS, H: HeapAllocator, T: TagGenerator> ProgramSwappable<H, T>
-    for VirtualMachine<'static, CS, StaticSourceLocation, H, T, StaticDaedalusImageVariants>
+impl<H: HeapAllocator, T: TagGenerator> ProgramSwappable<H, T>
+    for VirtualMachine<
+        'static,
+        DaedalusState<StaticDaedalusImageVariants, H, T>,
+        StaticSourceLocation,
+        H,
+        T,
+        StaticDaedalusImageVariants,
+    >
 {
     fn swap(
         &mut self,
         program: InactiveProgram<StaticDaedalusImageVariants, H, T>,
+        new_state: ProgramState,
     ) -> InactiveProgram<StaticDaedalusImageVariants, H, T> {
         // Replace each component of the VM so we execute the new inactive program
         // and return all of the prior stuff as an InactiveProgram.
         InactiveProgram {
+            state: new_state,
             image: core::mem::replace(&mut self.image, program.image),
             stack: core::mem::replace(&mut self.stack, program.stack),
             heap: core::mem::replace(&mut self.heap, program.heap),
@@ -130,33 +187,85 @@ impl<CS, H: HeapAllocator, T: TagGenerator> ProgramSwappable<H, T>
             error_handlers: core::mem::replace(&mut self.error_handlers, program.error_handlers),
             globals: core::mem::replace(&mut self.globals, program.globals),
             type_tags: core::mem::replace(&mut self.type_tags, program.type_tags),
+
+            // Swap the current daedalus state so we can reply/recv things again
+            pending_replies: core::mem::replace(
+                &mut self.capability_state.pending_replies,
+                program.pending_replies,
+            ),
+
+            inbox: core::mem::replace(&mut self.capability_state.inbox, program.inbox),
         }
     }
 }
 
 /// The current state of the daedalus execution
-/// 
+///
 /// This is stored with capabilities as the main engine
 /// of the state
 pub struct DaedalusState<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> {
     /// The current phase being executed
     pub current_phase: &'static Phase<I>,
 
+    /// Pending replies for the current phase being executed
+    ///
+    /// This is a map of the tag allocated for this call back to the
+    /// program's name that called it
+    pub pending_replies: HashMap<CallTag, &'static str>,
+
+    /// Pending messages to the current phase being execeuted
+    ///
+    /// This is because programs can technically send a message to a `Running`
+    /// program, in which then they wait. but the running program should not
+    /// recieve these messages until they are actually in the `BlockedOnRecv` state.
+    pub inbox: VecDeque<Message>,
+
     // The set of programs to execute that
     // are not currently executing
     pub programs: HashMap<&'static str, InactiveProgram<I, H, T>>,
+
+    /// Names of programs currently in a `Ready` state, in order
+    pub ready_queue: VecDeque<&'static str>,
 }
 
 impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> DaedalusState<I, H, T> {
     /// Creates a new DaedalusState with empty ready programs initialised
     /// with the current phase
-    /// 
+    ///
     /// It is expected that this is instantly used in a `VirtualMachine`
     /// with the current_phase properly matching the image else doom will occur.
     pub fn new(current_phase: &'static Phase<I>) -> Self {
         Self {
             current_phase,
-            programs: HashMap::new()
+            programs: HashMap::new(),
+            ready_queue: VecDeque::new(),
+            pending_replies: HashMap::new(),
+            inbox: VecDeque::new(),
+        }
+    }
+
+    /// Ensures `name` exists as a program and is ready
+    ///
+    /// This will either find `name` in the current set of programs and
+    /// mark it as ready (if it's BlockedOnReply/Recv) or create a new
+    /// program from the image associated with the program `name`.
+    pub fn make_ready(&mut self, name: &'static str, image: &'static I) {
+        match self.programs.entry(name) {
+            Entry::Occupied(mut entry) => {
+                // Mark as ready and push onto the queue
+                if entry.get().state != ProgramState::Ready {
+                    entry.get_mut().state = ProgramState::Ready;
+                    self.ready_queue.push_back(name);
+                }
+
+                // Already ready
+            }
+
+            // Create new image and push onto the queue
+            Entry::Vacant(entry) => {
+                entry.insert(InactiveProgram::from_image(image));
+                self.ready_queue.push_back(name);
+            }
         }
     }
 }

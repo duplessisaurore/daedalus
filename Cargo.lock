@@ -61,8 +61,8 @@ dependencies = [
 
 [[package]]
 name = "lepton3"
-version = "9.1.2"
-source = "git+https://github.com/duplessisaurore/lepton3#5ca443e319330665783373f6f090d9aa44262de3"
+version = "9.1.3"
+source = "git+https://github.com/duplessisaurore/lepton3#d83ab6da5bd1ad14cbcb2b4a6acf2e6cead9df79"
 dependencies = [
  "lepton_image",
  "lepton_opcodes",
@@ -72,7 +72,7 @@ dependencies = [
 [[package]]
 name = "lepton_image"
 version = "2.3.0"
-source = "git+https://github.com/duplessisaurore/lepton3#5ca443e319330665783373f6f090d9aa44262de3"
+source = "git+https://github.com/duplessisaurore/lepton3#d83ab6da5bd1ad14cbcb2b4a6acf2e6cead9df79"
 dependencies = [
  "lepton_opcodes",
 ]
@@ -80,12 +80,12 @@ dependencies = [
 [[package]]
 name = "lepton_opcodes"
 version = "3.0.0"
-source = "git+https://github.com/duplessisaurore/lepton3#5ca443e319330665783373f6f090d9aa44262de3"
+source = "git+https://github.com/duplessisaurore/lepton3#d83ab6da5bd1ad14cbcb2b4a6acf2e6cead9df79"
 
 [[package]]
 name = "lepton_vm"
-version = "9.1.2"
-source = "git+https://github.com/duplessisaurore/lepton3#5ca443e319330665783373f6f090d9aa44262de3"
+version = "9.1.3"
+source = "git+https://github.com/duplessisaurore/lepton3#d83ab6da5bd1ad14cbcb2b4a6acf2e6cead9df79"
 dependencies = [
  "lepton_image",
  "lepton_opcodes",
