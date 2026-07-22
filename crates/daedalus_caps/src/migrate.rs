@@ -6,8 +6,7 @@
 use alloc::vec::Vec;
 use hashbrown::HashMap;
 use lepton3::lepton_vm::{
-    heap_allocator::{HeapAllocator, HeapItem},
-    values::Value,
+    heap_allocator::{HeapAllocator, HeapItem}, tagger::TagGenerator, values::Value,
 };
 
 /// This migrates the referred to value between two heap allocators
@@ -17,8 +16,14 @@ use lepton3::lepton_vm::{
 /// copied.
 ///
 /// It is expected that the `migratee` exists in `a` and wants to be moved
-/// to `b`.
-pub fn migrate(a: &mut impl HeapAllocator, b: &mut impl HeapAllocator, migratee: Value) -> Value {
+/// to `b` and that the `Tagger` `t` passed in matches in the same environment
+/// that `b` is used in for Objects.
+/// 
+/// Object values that are migrated are all allocated new tags such that they
+/// do not clash with tags already allocated in `t`. This has the downside
+/// that the user can never technically know what it is, but is the only way that
+/// objects can be cleanly migrated.
+pub fn migrate(a: &mut impl HeapAllocator, b: &mut impl HeapAllocator, t: &mut impl TagGenerator, migratee: Value) -> Value {
     // These values have already been copied from `a` to `b`
     // since we don't want to infinitely recurse or waste time  re-copying things
     // and exploding the heap.
@@ -39,11 +44,14 @@ pub fn migrate(a: &mut impl HeapAllocator, b: &mut impl HeapAllocator, migratee:
         let mut item = core::mem::replace(b.get_item_mut(pending_item), HeapItem::Forwarded(0));
 
         match &mut item {
-            HeapItem::Object { fields, .. } => {
+            HeapItem::Object { fields, tag } => {
                 // Migrate all of the fields over from an object
                 for val in fields {
                     *val = migrate_value(a, b, &mut forwarded, &mut pending, *val);
                 }
+
+                // Migrate the tag over to a new one
+                *tag = t.allocate_tag();
             }
             HeapItem::Array(fields) => {
                 // Migrate all of the fields over from an array

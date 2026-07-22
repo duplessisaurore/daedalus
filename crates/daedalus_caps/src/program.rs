@@ -17,6 +17,8 @@ use lepton3::{
     },
 };
 
+use crate::migrate::migrate;
+
 /// A unique call's Tag which associates a reply back
 /// to some program
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone, Copy)]
@@ -63,7 +65,7 @@ pub struct InactiveProgram<
     T: TagGenerator = TagGeneratorImpl,
 > {
     /// Name of this Program in the set
-    /// of `daedalus_service` programs.
+    /// of `daedalus_service`
     pub name: &'static str,
 
     /// The current inactivity state of the program.
@@ -140,7 +142,9 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
     /// This program starts in the `Ready` state.
     ///
     /// The name of the program must match the one that can be looked up
-    /// to find this program again
+    /// to find this program again.
+    ///
+    /// This `Program` has no arguments in it's entry point function.
     #[must_use]
     pub fn from_image_with_name(image: &'static I, name: &'static str) -> Self {
         let mut initial_machine_state =
@@ -152,6 +156,57 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
             .call_function(entry, 0)
             .expect("expects entering the entry point to succeed");
 
+        Self::from_initial_machine(image, name, initial_machine_state)
+    }
+
+    /// Does the same as `from_image_with_name` but
+    /// instead, passes in the provided `arg` that may exist
+    /// in the heap allocator `arg_heap_alloc` to the starting
+    /// method of the `image`.
+    ///
+    /// The `arg_heap_alloc` is required for the full recursive
+    /// migration over into the new `InactiveProgram`.
+    #[must_use]
+    pub fn from_image_with_name_and_arg(
+        image: &'static I,
+        name: &'static str,
+        arg: Value,
+        arg_heap_alloc: &mut H,
+    ) -> Self {
+        let mut initial_machine_state =
+            VirtualMachine::new(image, Vec::new(), H::default(), T::default(), ());
+
+        // Migrate over the argument if necessary over to the new initial machine state which we package up
+        // for the `InactiveProgram`
+        initial_machine_state.stack.push(migrate(
+            arg_heap_alloc,
+            &mut initial_machine_state.heap,
+            &mut initial_machine_state.tagger,
+            arg,
+        ));
+
+        // Call the entry point in the new image, this should succeed...
+        // we also pass in our one argument here
+        let entry = image.header().entry_point as usize;
+        initial_machine_state
+            .call_function(entry, 1)
+            .expect("expects entering the entry point to succeed");
+
+        Self::from_initial_machine(image, name, initial_machine_state)
+    }
+
+    /// Creates a new `InactiveProgram` that can be swapped into from
+    /// this implementation of `StaticLeptonImage`.
+    ///
+    /// This takes in an `initial_machine_state` VirtualMachine and packages
+    /// all of its current state alongside the `image` and it's `name`
+    /// into an `InactiveMachine`
+    #[must_use]
+    fn from_initial_machine(
+        image: &'static I,
+        name: &'static str,
+        initial_machine_state: VirtualMachine<'_, (), StaticSourceLocation, H, T, I>,
+    ) -> Self {
         Self {
             name,
             state: ProgramState::Ready,
