@@ -114,9 +114,11 @@ fn copy_item(
     // This should be the first time we try copy it over since
     // we havent seen it in `forwarded`.
     let item = a.get_item(old_idx);
-    if let HeapItem::Forwarded(_) = item { unreachable!(
-        "Should never try to copy over a forwarded item, else gc collection died midway through"
-    ) };
+    if let HeapItem::Forwarded(_) = item {
+        unreachable!(
+            "Should never try to copy over a forwarded item, else gc collection died midway through"
+        )
+    };
 
     // Re-allocate it over in `b` to copy it into b
     // and add to forwarded/pending so we don't re-allocate it

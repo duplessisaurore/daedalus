@@ -49,8 +49,9 @@ pub enum ProgramState {
 
     /// Ready, this program can execute and is waiting
     /// to be picked up
-    Ready, // Running is not here since the current VM program
-           // is the running one.
+    Ready,
+    // Running is not here since the current VM program
+    // is the running one.
 }
 
 /// An inactive program, this has some state
@@ -61,6 +62,10 @@ pub struct InactiveProgram<
     H: HeapAllocator = HeapAllocatorImpl,
     T: TagGenerator = TagGeneratorImpl,
 > {
+    /// Name of this Program in the set
+    /// of `daedalus_service` programs.
+    pub name: &'static str,
+
     /// The current inactivity state of the program.
     ///
     /// This is essentially the three-state program model
@@ -133,8 +138,11 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
     /// and then steals all of its initial state to create the program.
     ///
     /// This program starts in the `Ready` state.
+    ///
+    /// The name of the program must match the one that can be looked up
+    /// to find this program again
     #[must_use]
-    pub fn from_image(image: &'static I) -> Self {
+    pub fn from_image_with_name(image: &'static I, name: &'static str) -> Self {
         let mut initial_machine_state =
             VirtualMachine::new(image, Vec::new(), H::default(), T::default(), ());
 
@@ -145,6 +153,7 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
             .expect("expects entering the entry point to succeed");
 
         Self {
+            name,
             state: ProgramState::Ready,
             image,
             stack: initial_machine_state.stack,
@@ -195,6 +204,7 @@ impl<H: HeapAllocator, T: TagGenerator> ProgramSwappable<H, T>
             ),
 
             inbox: core::mem::replace(&mut self.capability_state.inbox, program.inbox),
+            name: core::mem::replace(&mut self.capability_state.current_program, program.name),
         }
     }
 }
@@ -206,6 +216,13 @@ impl<H: HeapAllocator, T: TagGenerator> ProgramSwappable<H, T>
 pub struct DaedalusState<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> {
     /// The current phase being executed
     pub current_phase: &'static Phase<I>,
+
+    /// The name of the program currently loaded in the VM.
+    ///
+    /// This is seperate from the current phase as programs
+    /// can call other programs as services which this is, but
+    /// not necessarily the current phase executing.
+    pub current_program: &'static str,
 
     /// Pending replies for the current phase being executed
     ///
@@ -236,6 +253,7 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Daedalus
     /// with the current_phase properly matching the image else doom will occur.
     pub fn new(current_phase: &'static Phase<I>) -> Self {
         Self {
+            current_program: current_phase.program.name,
             current_phase,
             programs: HashMap::new(),
             ready_queue: VecDeque::new(),
@@ -263,7 +281,7 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Daedalus
 
             // Create new image and push onto the queue
             Entry::Vacant(entry) => {
-                entry.insert(InactiveProgram::from_image(image));
+                entry.insert(InactiveProgram::from_image_with_name(image, name));
                 self.ready_queue.push_back(name);
             }
         }
