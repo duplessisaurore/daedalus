@@ -6,7 +6,7 @@
 //!
 //! ## Daedalus Service
 //!
-//! The `daedalus_service` crate provides a library combined with a build
+//! The `daedalus_program` crate provides a library combined with a build
 //! script that embeds daedalus programs into the bootloader binary as pre-parsed
 //! and validated rust structs.
 
@@ -38,12 +38,6 @@ pub struct Program<Image: StaticLeptonImage + 'static> {
     // The name of the program, this is defined in the
     // "name" field of the manifest.toml
     pub name: &'static str,
-
-    // These are the services this program provides
-    pub services: &'static [&'static str],
-
-    // These are the services this program requires to run
-    pub requires: &'static [&'static str],
 
     // The actual image (lepton3) of this program
     pub image: &'static Image,

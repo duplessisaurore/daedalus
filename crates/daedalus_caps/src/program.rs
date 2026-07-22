@@ -3,7 +3,7 @@
 //! between programs.
 
 use alloc::{collections::vec_deque::VecDeque, vec::Vec};
-use daedalus_service::{
+use daedalus_program::{
     Phase, StaticDaedalusImageVariants, StaticLeptonImage, StaticSourceLocation,
 };
 use hashbrown::{HashMap, hash_map::Entry};
@@ -65,7 +65,7 @@ pub struct InactiveProgram<
     T: TagGenerator = TagGeneratorImpl,
 > {
     /// Name of this Program in the set
-    /// of `daedalus_service`
+    /// of `daedalus_program`
     pub name: &'static str,
 
     /// The current inactivity state of the program.
@@ -275,8 +275,7 @@ pub struct DaedalusState<I: StaticLeptonImage + 'static, H: HeapAllocator, T: Ta
     /// The name of the program currently loaded in the VM.
     ///
     /// This is seperate from the current phase as programs
-    /// can call other programs as services which this is, but
-    /// not necessarily the current phase executing.
+    /// can call other programs
     pub current_program: &'static str,
 
     /// Pending replies for the current phase being executed

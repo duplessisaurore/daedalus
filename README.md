@@ -7,7 +7,7 @@
   <strong>A micro-bootloader</strong>
 </div>
 <div align="center">
-  A services-oriented micro-bootloader built on the Lepton3 virtual machine. 
+  A programs-oriented micro-bootloader built on the Lepton3 virtual machine. 
 </div>
 
 ## 🌌 Table of Contents

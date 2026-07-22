@@ -24,23 +24,41 @@
 /// = `block_recv`
 /// 
 /// This capability blocks the current program until a message
-/// is recieved in the inbox of the current program.
+/// is recieved in the inbox of the current program. This is blocked
+/// in the `BlockOnRecv` state.
 /// 
-/// Once a message is recieved, this program will then be rescheduled
-/// to the `Ready` state which can then be picked up and executed by
-/// the scheduler.
+/// The `block_recv` syscall will produce both a `call_tag` `Tag` and
+/// the message's arguments into the stack current program in the order of:
 /// 
-/// The `block_recv` syscall will produce both a `ret_call_tag` `Tag` and
-/// the message's arguments into the current program in the order of:
+///     [<top> `arg`, `call_tag`, ...]
 /// 
-///     [`arg`, `ret_call_tag`]
-/// 
-/// This `ret_call_tag` is important and should not be lost as the caller
+/// This `call_tag` is important and should not be lost as the caller
 /// may never wake up if the corresponding `non_block_reply` to this tag
-/// is never executed. This `ret_call_tag` is essentially a unique marker
-/// of the current call from some caller and is used to reply back to that
-/// caller.
+/// is never executed. 
+/// 
+/// This `call_tag` is essentially a unique marker of the current call 
+/// from some caller and is used to reply back to that caller with the return
+/// value.
 /// 
 /// The `arg` is always a single value, the caller may pass multiple parameters
-/// through the usage of an array which will be copied into the current program.
+/// through the usage of an array/object which will be migrated into the current program.
+
+/// = `block_call`
+/// 
+/// This capability blocks the current program and pushes a message
+/// into the inbox of the destination program.
+/// 
+/// If the destination program is in the `BlockedOnRecv` state, it is rescheduled
+/// into the `Ready` state, otherwise the message will have to wait for
+/// `block_recv` to be called in the destination program.
+/// 
+/// The arguments to the `block_call` are as follows:
+/// 
+///     [ <top> `arg`, `name` ]
+/// 
+/// The `name` references which program to target for the message, `arg` is
+/// the argument that is passed to the destination program through this message 
+/// (see `block_recv`).
+
+
 

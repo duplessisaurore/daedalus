@@ -1,17 +1,13 @@
 //! This build script reads daedalus programs and outputs them
 //! under a programs.rs with the daedalus programs & daedalus manifest
 //! generated as rust structs that can then be embedded into daedalus
-//! itself through the `daedalus_service` crate.
+//! itself through the `daedalus_program` crate.
 
 use std::fmt::Write;
 use std::{collections::HashSet, env, fs, path::PathBuf};
 
 use lepton3::{parser, validator};
 use serde::Deserialize;
-
-// These are the builtin services that are handled by the daedalus core rather
-// than a daedalus program.
-const BUILTIN_SERVICES: [&str; 2] = ["memory::write_mem_32", "memory::read_mem_32"];
 
 /// The parsed content of a Daedalus
 /// program manifest.
@@ -20,14 +16,6 @@ const BUILTIN_SERVICES: [&str; 2] = ["memory::write_mem_32", "memory::read_mem_3
 struct Manifest {
     // The name defined for this program in the manifest
     name: String,
-
-    // The services defined in this manifest
-    #[serde(default)]
-    services: Vec<String>,
-
-    // The services this program requires
-    #[serde(default)]
-    requires: Vec<String>,
 
     // The source lepton3 image for this program
     image: String,
@@ -335,11 +323,6 @@ fn main() {
     // The seen set of names, a duplicate program name is not permitted
     let mut seen = HashSet::new();
 
-    // All referenced services, services provided must be a superset of required
-    let mut required = HashSet::new();
-    let mut provided = HashSet::with_capacity(BUILTIN_SERVICES.len());
-    provided.extend(BUILTIN_SERVICES.map(String::from));
-
     // This is the buf for the static image structs
     let mut image_structs_out = String::new();
 
@@ -398,44 +381,11 @@ fn main() {
             output,
             "static {program_name}: &'static Program<StaticDaedalusImageVariants> = &Program {{
         name: {:?},
-        services: &[{}],
-        requires: &[{}],
         image: &StaticDaedalusImageVariants::{struct_name}(&{}),
         }};",
-            manifest.name,
-            manifest
-                .services
-                .iter()
-                .map(|elem| format!("\"{}\"", elem))
-                .collect::<Vec<_>>()
-                .join(","),
-            manifest
-                .requires
-                .iter()
-                .map(|elem| format!("\"{}\"", elem))
-                .collect::<Vec<_>>()
-                .join(","),
-            image_literal
+            manifest.name, image_literal
         )
         .unwrap();
-
-        // Add to services set to ensure we meet all services req at comp time
-        required.extend(manifest.requires);
-        provided.extend(
-            manifest
-                .services
-                .iter()
-                .map(|service| format!("{}::{}", manifest.name, service)),
-        );
-    }
-
-    // Check that we have all requried services
-    if !provided.is_superset(&required) {
-        panic!(
-            "\x1b[93mmissing required services `{:?}`: these were not provided by any referenced daedalus programs\n\nprovided services: {:?}\x1b[0m",
-            required.difference(&provided),
-            provided
-        )
     }
 
     output.push_str(&image_structs_out);
@@ -464,7 +414,6 @@ fn main() {
 
         enum_match_arms
     };
-
 
     output.push_str(&format!(
         "

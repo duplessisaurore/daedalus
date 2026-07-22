@@ -1,10 +1,10 @@
 [package]
-name = "daedalus_service"
+name = "daedalus_program"
 version = "1.0.0"
 edition = "2024"
 authors = ["The Daedalus Contributors"]
 
-description = "A library that embeds daedalus services into the rust build process as a static array"
+description = "A library that embeds daedalus programs into the rust build process as a static array"
 readme = "README.md"
 
 repository = "https://github.com/duplessisaurore/daedalus"

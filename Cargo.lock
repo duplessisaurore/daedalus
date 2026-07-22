@@ -12,13 +12,13 @@ checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 name = "daedalus_caps"
 version = "1.0.0"
 dependencies = [
- "daedalus_service",
+ "daedalus_program",
  "hashbrown",
  "lepton3",
 ]
 
 [[package]]
-name = "daedalus_service"
+name = "daedalus_program"
 version = "1.0.0"
 dependencies = [
  "lepton3",
