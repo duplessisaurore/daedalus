@@ -25,4 +25,4 @@ pub mod program;
 
 /// Capabililties that provide for IPC between programs
 /// for the full daedalus bootloader functionality
-pub mod capabilities; 
+pub mod capabilities;

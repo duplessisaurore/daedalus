@@ -26,30 +26,46 @@ pub struct CallAssociation {
     pub caller_side_tag: CallTag,
 
     /// This is the name of the caller's program which we return to
-    pub caller_program: &'static str
+    pub caller_program: &'static str,
 }
 
 /// A unique call's Tag which associates a reply back
 /// to some program
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone, Copy)]
-pub struct CallTag(Tag);
+pub struct CallTag(pub Tag);
 
 /// A request sitting in the inbox of a program, waiting
 /// to be recieved (see `inbox` in `DaedalusState`)
 pub struct Message {
     /// The unique call tag associated with this new message
     /// to the inbox so the receiever can reply
-    /// 
+    ///
     /// `None` marks a message that will have it's `call_tag`
     /// be delivered as a `Unit` This is for cases where a program
     /// is woken up in the `block_recv` state by not a call (for
     /// example with a `finish`)
-    pub tag: CallTag,
+    pub tag: Option<CallTag>,
 
     /// The argument the caller passed
     pub args: Value,
 }
 
+impl Message {
+    /// Pushes this message onto `stack` in the shape discussed in
+    /// the header comment of `daedalus_caps::capabilities`,.
+    ///
+    ///     [<top> `payload`, `call_tag`]
+    ///
+    /// If the tag is `None` this is a `Unit`.
+    pub fn deliver_onto(self, stack: &mut Vec<Value>) {
+        match self.tag {
+            Some(tag) => stack.push(Value::Tag(tag.0)),
+            None => stack.push(Value::Unit),
+        }
+
+        stack.push(self.args);
+    }
+}
 /// The current state of an inactive program.
 ///
 /// This decides whether or not this program can
@@ -62,12 +78,14 @@ pub enum ProgramState {
 
     /// This program is blocked and is waiting for a `reply`
     /// on one of it's calls to a different program
+    ///
+    /// This can only be woken up on a reply with the associated
+    /// `CallTag`.
     BlockedOnReply { tag: CallTag },
 
     /// Ready, this program can execute and is waiting
     /// to be picked up
     Ready,
-
     // Running is not here since the current VM program
     // is the running one.
 }
@@ -238,6 +256,27 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
             inbox: VecDeque::new(),
         }
     }
+
+    /// If this program is blocked in `block_recv` and has an
+    /// item in it's inbox (from another program) then wakes up
+    /// this program (puts it in the `Ready` state) and adds the `Message`
+    /// to the stack of this program.
+    ///
+    /// This returns whether or not the program was woken.
+    pub fn wake_recv(&mut self) -> bool {
+        if self.state != ProgramState::BlockedOnRecv {
+            return false;
+        }
+
+        let Some(message) = self.inbox.pop_front() else {
+            return false;
+        };
+
+        message.deliver_onto(&mut self.stack);
+
+        self.state = ProgramState::Ready;
+        true
+    }
 }
 
 impl<H: HeapAllocator, T: TagGenerator> ProgramSwappable<H, T>
@@ -337,13 +376,27 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Daedalus
     /// This will either find `name` in the current set of programs and
     /// mark it as ready (if it's BlockedOnReply/Recv) or create a new
     /// program from the image associated with the program `name`.
+    ///
+    /// This new program from the image associated
     pub fn make_ready(&mut self, name: &'static str, image: &'static I) {
         match self.programs.entry(name) {
             Entry::Occupied(mut entry) => {
                 // Mark as ready and push onto the queue
-                if entry.get().state != ProgramState::Ready {
-                    entry.get_mut().state = ProgramState::Ready;
-                    self.ready_queue.push_back(name);
+                let program = entry.get_mut();
+
+                if program.state != ProgramState::Ready {
+                    // Since a blocked program (blockrecv)
+                    // expects a message on its inbox (else
+                    // itll pop too much) we push the empty
+                    // message notification.
+                    program.inbox.push_back(Message {
+                        tag: None,
+                        args: Value::Unit,
+                    });
+
+                    if program.wake_recv() {
+                        self.ready_queue.push_back(name);
+                    }
                 }
 
                 // Already ready

@@ -6,7 +6,9 @@
 use alloc::vec::Vec;
 use hashbrown::HashMap;
 use lepton3::lepton_vm::{
-    heap_allocator::{HeapAllocator, HeapItem}, tagger::TagGenerator, values::Value,
+    heap_allocator::{HeapAllocator, HeapItem},
+    tagger::TagGenerator,
+    values::Value,
 };
 
 /// This migrates the referred to value between two heap allocators
@@ -18,12 +20,17 @@ use lepton3::lepton_vm::{
 /// It is expected that the `migratee` exists in `a` and wants to be moved
 /// to `b` and that the `Tagger` `t` passed in matches in the same environment
 /// that `b` is used in for Objects.
-/// 
+///
 /// Object values that are migrated are all allocated new tags such that they
 /// do not clash with tags already allocated in `t`. This has the downside
 /// that the user can never technically know what it is, but is the only way that
 /// objects can be cleanly migrated.
-pub fn migrate(a: &mut impl HeapAllocator, b: &mut impl HeapAllocator, t: &mut impl TagGenerator, migratee: Value) -> Value {
+pub fn migrate(
+    a: &mut impl HeapAllocator,
+    b: &mut impl HeapAllocator,
+    t: &mut impl TagGenerator,
+    migratee: Value,
+) -> Value {
     // These values have already been copied from `a` to `b`
     // since we don't want to infinitely recurse or waste time  re-copying things
     // and exploding the heap.
