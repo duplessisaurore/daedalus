@@ -41,7 +41,7 @@ use lepton3::{VirtualMachine, lepton_vm::{
     heap_allocator::{HeapAllocator, HeapItem}, tagger::TagGenerator, values::Value,
 }};
 
-use crate::{errors::DaedalusCapErrors, program::{DaedalusState, InactiveProgram, Message, ProgramState, ProgramSwappable}};
+use crate::{errors::DaedalusCapErrors, migrate::migrate, program::{CallAssociation, CallTag, DaedalusState, InactiveProgram, Message, ProgramState, ProgramSwappable}};
 
 /// a DaedalusVM, this is a VM that daedalus runs.
 /// 
@@ -237,4 +237,94 @@ fn run_next_ready<H: HeapAllocator, T: TagGenerator>(
     }
  
     Ok(())
+}
+
+/// Sends a request to another program, taking the arguments
+/// from the stack of the VM and then calls a destination program.
+///
+/// This is done through these steps:
+///     - pop [<top> `payload`/`arg`, `destination`], destination here is prog name
+///     - this then allocates a new tag in the caller (current) and the destination's space
+///     - migrates the `payload/arg` into the `destination`
+///     - adds a new message with the dest call_tag and migrataed payload to the destination
+///     - records CallAssociation for this program in the destination for it to match replying back with
+///     - and wakes the dest program if it was in a `BlockOnRecv` state (as in it's now `Ready`).
+///
+/// Returns the caller-side tag (that is the tag allocatedd in the current program)
+fn send_request<H: HeapAllocator, T: TagGenerator>(
+    virtual_machine: &mut DaedalusVm<H, T>,
+) -> Result<CallTag, DaedalusCapErrors> {
+    let argument = virtual_machine
+        .stack
+        .pop()
+        .ok_or(DaedalusCapErrors::StackUnderflowExpectedMessageArgPayload)?;
+    let name_value = virtual_machine
+        .stack
+        .pop()
+        .ok_or(DaedalusCapErrors::StackUnderflowExpectedProgramName)?;
+    
+    // Find the destination program spec/embedded from the value..
+    let destination = program_from_value_name(&name_value, &virtual_machine.heap)?.name;
+    
+    // Make sure it's not calling itself (shoot yourself in the foot behaviour)
+    // and actually is a program that was running
+    {
+        let state = &virtual_machine.capability_state;
+ 
+        if destination == state.current_program {
+            return Err(DaedalusCapErrors::CallToSelf(destination));
+        }
+ 
+        if !state.programs.contains_key(destination) {
+            return Err(DaedalusCapErrors::UnknownDestination(destination));
+        }
+    }
+ 
+    // Caller-side tag, this is the tag in the current program's space
+    let caller_tag = CallTag(virtual_machine.tagger.allocate_tag());
+    
+    let caller_heap = &mut virtual_machine.heap;
+    let state = &mut virtual_machine.capability_state;
+    let caller_name = state.current_program;
+    
+    // Find the inactive destination program we are calling.
+    let destination_program = state
+        .programs
+        .get_mut(destination)
+        .expect("checked to exist above");
+ 
+    // Destination-side tag, this will be used for it to reply back to us (caller)
+    let destination_tag = CallTag(destination_program.tagger.allocate_tag());
+ 
+    // Migrate the argument over into the destination's heap so it's valid.
+    let argument = migrate(
+        caller_heap,
+        &mut destination_program.heap,
+        &mut destination_program.tagger,
+        argument,
+    );
+    
+    // Add the CallAssociation so we can match call tags for `non_block_call` and know
+    // which program we are actually replying to
+    destination_program.pending_replies.insert(
+        destination_tag,
+        CallAssociation {
+            caller_side_tag: caller_tag,
+            caller_program: caller_name,
+        },
+    );
+    
+    // Add this message to the inbox of the destination program
+    // so if it's blocked on recv it can recv it.
+    destination_program.inbox.push_back(Message {
+        tag: Some(destination_tag),
+        args: argument,
+    });
+    
+    // Wake up the program if needed
+    if destination_program.wake_recv() {
+        state.ready_queue.push_back(destination);
+    }
+ 
+    Ok(caller_tag)
 }

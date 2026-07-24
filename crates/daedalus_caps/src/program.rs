@@ -10,6 +10,7 @@ use hashbrown::{HashMap, hash_map::Entry};
 use lepton3::{
     HeapAllocatorImpl, TagGeneratorImpl, VirtualMachine,
     lepton_vm::{
+        capabilities::CapabilityGcRoots,
         heap_allocator::HeapAllocator,
         tagger::TagGenerator,
         values::{Tag, TypeTags, Value},
@@ -200,7 +201,7 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
     ///
     /// The `arg_heap_alloc` is required for the full recursive
     /// migration over into the new `InactiveProgram`.
-    /// 
+    ///
     /// This does not guarantee the argument is passed to the new
     /// program if the new program's entry point does not take any
     /// arguments.
@@ -214,7 +215,11 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
         let mut initial_machine_state =
             VirtualMachine::new(image, Vec::new(), H::default(), T::default(), ());
 
-        if let Some(entry_function) = image.function_table().get(image.header().entry_point as usize) && entry_function.arg_count > 0 {
+        if let Some(entry_function) = image
+            .function_table()
+            .get(image.header().entry_point as usize)
+            && entry_function.arg_count > 0
+        {
             // Migrate over the argument if necessary over to the new initial machine state which we package up
             // for the `InactiveProgram`
             initial_machine_state.stack.push(migrate(
@@ -413,6 +418,19 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Daedalus
                 entry.insert(InactiveProgram::from_image_with_name(image, name));
                 self.ready_queue.push_back(name);
             }
+        }
+    }
+}
+
+impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> CapabilityGcRoots
+    for DaedalusState<I, H, T>
+{
+    /// The running program's inbox payloads maybe heap values which should not
+    /// be collected by the gc while they remain in the inbox (else by the time a program
+    /// get's them out, they may all be corrupted!)
+    fn append_roots<'roots>(&'roots mut self, roots: &mut Vec<&'roots mut Value>) {
+        for message in &mut self.inbox {
+            roots.push(&mut message.args);
         }
     }
 }
