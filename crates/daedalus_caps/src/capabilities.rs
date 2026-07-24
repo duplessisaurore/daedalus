@@ -34,3 +34,49 @@
 //! a caller to match back the reply to some call will need to match
 //! by the `call_tag` allocated in `non_block_call` (which will be the
 //! same one used in the reply `Message`.)
+
+use alloc::{string::ToString, vec::Vec};
+use daedalus_program::{Program, StaticDaedalusImageVariants, get_program};
+use lepton3::lepton_vm::{
+    heap_allocator::{HeapAllocator, HeapItem},
+    values::Value,
+};
+
+use crate::errors::DaedalusCapErrors;
+
+/// This decodes a program's name as a `Lepton3` value down
+/// into the program's name as a &'static str and returns the
+/// associated program with this name
+///
+/// (or a CapabilityError when it could not be found)
+fn program_from_value_name<H: HeapAllocator>(
+    name_value: &Value,
+    heap: &H,
+) -> Result<&'static Program<StaticDaedalusImageVariants>, DaedalusCapErrors> {
+    // A string is always an array of UInt's
+    let Value::Array(index) = name_value else {
+        return Err(DaedalusCapErrors::ProgramNameExpected);
+    };
+
+    let HeapItem::Array(fields) = heap.get_item(*index) else {
+        return Err(DaedalusCapErrors::ProgramNameExpected);
+    };
+
+    // Collect all the string bytes and validate them as a utf-8 str
+    let mut bytes = Vec::with_capacity(fields.len());
+    for field in fields {
+        let Value::UInt(byte) = field else {
+            return Err(DaedalusCapErrors::ProgramNameExpected);
+        };
+
+        let byte = u8::try_from(*byte).map_err(|_| DaedalusCapErrors::ProgramNameExpected)?;
+        bytes.push(byte);
+    }
+
+    let name = core::str::from_utf8(&bytes).map_err(|_| DaedalusCapErrors::ProgramNameExpected)?;
+
+    // Look up the corresponding program with this name
+    get_program(name).ok_or_else(
+        || DaedalusCapErrors::CouldNotFindProgram { looked_up_program_name: name.to_string() }
+    )
+}
