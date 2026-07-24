@@ -473,6 +473,35 @@ pub fn cap_block_call<H: HeapAllocator, T: TagGenerator>(
 }
 
 
+/// = `non_block_call`
+///
+/// This capability is the same as `block_call` but it does not block
+/// the current program. The arguments are the same as `block_call`.
+/// 
+/// This instead returns prematurely with the message pushed onto
+/// the destinations program's inbox with this in the current programs
+/// stack:
+///
+///     [<top> `call_tag`]
+///
+/// This `call_tag` is important, as it can be used to match back the
+/// returned arguments from the destination program whenever this program
+/// yields. (which may be done on any yield/block). 
+/// 
+/// Be careful with `block_recv`! a non_block_call from the current program
+/// to the next program can have it's return appear in a `block_recv` as the
+/// non blocking response will just be a simple message in the current program's
+/// inbox!
+pub fn cap_non_block_call<H: HeapAllocator, T: TagGenerator>(
+    virtual_machine: &mut DaedalusVm<H, T>,
+) -> Result<(), Box<dyn Error>> {
+    let caller_tag = send_request(virtual_machine)?;
+
+    // This is the tag that will be allocated in the current caller
+    // and returned through the `CallAssociation`, :) match on this nya! :3c mrawoww wruff !! im a puppy girll wruff !!
+    virtual_machine.stack.push(Value::Tag(caller_tag.0));
+    Ok(())
+}
 
 
  
