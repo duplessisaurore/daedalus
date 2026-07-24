@@ -2,7 +2,7 @@
 //! can occur during the running of the `Daedalus`
 //! capabilities.
 
-use core::fmt::Display;
+use core::{error::Error, fmt::Display};
 
 use alloc::string::String;
 
@@ -49,6 +49,10 @@ pub enum DaedalusCapErrors {
     /// be instead calling a function in the local state instead of needing
     /// a full IPC call.
     CallToSelf(&'static str),
+
+    /// The next phases's entry argument was expected to be provided on the stack
+    /// to the `finish` capability, but nothing was found!
+    StackUnderflowFinishArg,
 }
 
 impl Display for DaedalusCapErrors {
@@ -94,7 +98,15 @@ impl Display for DaedalusCapErrors {
             Self::CallToSelf(name) => {
                 write!(f, "daedalus found a program call that called its own program: `{name:?}`, this is not good behaviour and explicitly disallowed!")
             }
-
+            Self::StackUnderflowFinishArg => {
+                write!(
+                    f,
+                    "daedalus expected to find some argument to the next phase's program but nothing was found!"
+                )
+            }
         }
     }
+}
+
+impl Error for DaedalusCapErrors {
 }
