@@ -484,7 +484,7 @@ pub fn cap_block_call<H: HeapAllocator, T: TagGenerator>(
 ///
 /// This `call_tag` is important, as it can be used to match back the
 /// returned arguments from the destination program whenever this program
-/// yields. (which may be done on any yield/block).
+/// blocks on recv, which will pop these messages.
 ///
 /// Be careful with `block_recv`! a non_block_call from the current program
 /// to the next program can have it's return appear in a `block_recv` as the
@@ -537,7 +537,8 @@ pub fn cap_non_block_reply<H: HeapAllocator, T: TagGenerator>(
     let Value::Tag(tag) = tag_value else {
         return Err(DaedalusCapErrors::ReplyTagExpected {
             found_type: value_type_name(&tag_value),
-        })?;
+        }
+        .into());
     };
 
     let callee_tag = CallTag(tag);

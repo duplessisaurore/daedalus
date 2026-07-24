@@ -42,9 +42,10 @@ pub struct Message {
     /// to the inbox so the receiever can reply
     ///
     /// `None` marks a message that will have it's `call_tag`
-    /// be delivered as a `Unit` This is for cases where a program
-    /// is woken up in the `block_recv` state by not a call (for
-    /// example with a `finish`)
+    /// be delivered as a `Unit`.
+    /// 
+    /// These are for notifications from `daedalus` rather than
+    /// from a call itself, and cannot be replied to.
     pub tag: Option<CallTag>,
 
     /// The argument the caller passed
@@ -135,17 +136,9 @@ pub struct InactiveProgram<
     // Pre-allocated well-known type tags.
     pub type_tags: TypeTags,
 
-    /// Pending replies for the inactive program
-    ///
-    /// This is a map of the tag allocated for its calls back to the
-    /// program that called it
+    // View `DaedalusState` for the meaning of these.
+    
     pub pending_replies: HashMap<CallTag, CallAssociation>,
-
-    /// Pending messages to the inactive program
-    ///
-    /// This is because a program can yield without
-    /// necessarily having to recv a message, say
-    /// calling something else too
     pub inbox: VecDeque<Message>,
 }
 
@@ -215,26 +208,35 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
         let mut initial_machine_state =
             VirtualMachine::new(image, Vec::new(), H::default(), T::default(), ());
 
-        if let Some(entry_function) = image
+        // Grab the entry point, and the number of args
+        // we optionally parse the argument if there is one
+        let entry = image.header().entry_point as usize;
+        let arg_count = image
             .function_table()
-            .get(image.header().entry_point as usize)
-            && entry_function.arg_count > 0
-        {
-            // Migrate over the argument if necessary over to the new initial machine state which we package up
-            // for the `InactiveProgram`
-            initial_machine_state.stack.push(migrate(
-                arg_heap_alloc,
-                &mut initial_machine_state.heap,
-                &mut initial_machine_state.tagger,
-                arg,
-            ));
+            .get(entry)
+            .expect("entry point must exist in the function table")
+            .arg_count;
 
-            // Call the entry point in the new image, this should succeed...
-            // we also pass in our one argument here
-            let entry = image.header().entry_point as usize;
-            initial_machine_state
-                .call_function(entry, 1)
-                .expect("expects entering the entry point to succeed");
+        match arg_count {
+            // Entry takes no arguments, drop the arg, but still meow and purr andd mrrrprr everywhere
+            0 => initial_machine_state
+                .call_function(entry, 0)
+                .expect("expects entering the entry point to succeed"),
+
+            // Actual argument, call it with 1 arg.
+            1 => {
+                initial_machine_state.stack.push(migrate(
+                    arg_heap_alloc,
+                    &mut initial_machine_state.heap,
+                    &mut initial_machine_state.tagger,
+                    arg,
+                ));
+                initial_machine_state
+                    .call_function(entry, 1)
+                    .expect("expects entering the entry point to succeed");
+            },
+
+            _ => unreachable!("daedalus build validation handles this casee")
         }
 
         Self::from_initial_machine(image, name, initial_machine_state)
@@ -347,14 +349,15 @@ pub struct DaedalusState<I: StaticLeptonImage + 'static, H: HeapAllocator, T: Ta
     /// Pending replies for the current phase being executed
     ///
     /// This is a map of the tag allocated for this call back to the
-    /// program that called it.
+    /// program that called it alongside the tag in the program that called it's space
+    /// as part of a `CallAssociation`.
     pub pending_replies: HashMap<CallTag, CallAssociation>,
 
     /// Pending messages to the current phase being execeuted
     ///
-    /// This is because programs can technically send a message to a `Running`
-    /// program, in which then they wait. but the running program should not
-    /// recieve these messages until they are actually in the `BlockedOnRecv` state.
+    /// These can be viewed in a program through the `block_recv` capability call,
+    /// and a program may have multiple pending messgaes (through `non_block_call`
+    /// to it etc.)
     pub inbox: VecDeque<Message>,
 
     // The set of programs to execute that
@@ -382,11 +385,11 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Daedalus
         }
     }
 
-    /// Ensures `name` exists as a program and is ready
+    /// Ensures `name` exists as a program and sets it up as ready if it should be.
     ///
     /// This will either find `name` in the current set of programs and
-    /// mark it as ready (if it's BlockedOnReply/Recv) or create a new
-    /// program from the image associated with the program `name`.
+    /// mark it as ready if it is ready to be ready (e.g BlockOnRecv has inbox msg). 
+    /// or create a new program from the image associated with the program `name`.
     ///
     /// This new program from the image associated
     pub fn make_ready(&mut self, name: &'static str, image: &'static I) {

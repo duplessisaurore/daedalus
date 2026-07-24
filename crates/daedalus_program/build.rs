@@ -189,6 +189,14 @@ fn write_out_image(name: &str, image_path: PathBuf, out: &mut String) -> String 
     }
     object_table_literal.push(']');
 
+    // Make sure that the entry point function has only 0/1 args
+    if image.function_table[image.header.entry_point as usize].arg_count > 1 {
+        panic!(
+            "The image at path: {}'s entry point has greater than 0/1 arguments, this is not permitted!",
+            image_path.display()
+        )
+    }
+
     // Write out the function table as an array literal
     let mut function_table_literal = String::from("[");
     for function in image.function_table {
