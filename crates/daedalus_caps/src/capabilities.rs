@@ -47,6 +47,7 @@ use lepton3::{
         heap_allocator::{HeapAllocator, HeapItem},
         tagger::TagGenerator,
         values::Value,
+        virtual_machine::value_type_name,
     },
 };
 
@@ -386,15 +387,15 @@ pub fn cap_finish<H: HeapAllocator, T: TagGenerator>(
 /// received in its inbox, delivering it as:
 ///
 ///     [<top> `arg`, `call_tag`]
-/// 
+///
 /// To the current stack of the program.
-/// 
+///
 /// This `Message` can either be a request to the current program `call_tag`
 /// is a tag, or a "notification" from daedalus with a `Unit` in the `call_tag`.
 ///
 /// If the inbox already holds a message it is delivered immediately
-/// with no program switching and state changing (fast-path). 
-/// 
+/// with no program switching and state changing (fast-path).
+///
 /// Otherwise the program's state is changed to `BlockedOnRecv` and the next
 /// program runs.
 ///
@@ -407,28 +408,26 @@ pub fn cap_block_recv<H: HeapAllocator, T: TagGenerator>(
     loop {
         // Check if there is already something in the inbox (fast-path)
         if let Some(message) = virtual_machine.capability_state.inbox.pop_front() {
-
             // Ok! we have something, add it to our stack and return
             message.deliver_onto(&mut virtual_machine.stack);
             return Ok(());
         }
-        
+
         if !virtual_machine.capability_state.ready_queue.is_empty() {
             break;
         }
- 
+
         // Nothing to receive and nobody to run, in this case we are
         // advancing the phase to the next phase to continue running the boot process
         // (else we will instantly halt)
         advance_phase(virtual_machine, None)?;
     }
-    
+
     // There is no message to be recieved by the program, block it and run the next guy.
     run_next_ready(virtual_machine, Some(ProgramState::BlockedOnRecv))?;
     Ok(())
 }
 
- 
 /// = `block_call`
 ///
 /// This capability blocks the current program and pushes a message
@@ -437,32 +436,32 @@ pub fn cap_block_recv<H: HeapAllocator, T: TagGenerator>(
 ///
 ///     [<top> `arg`, `name`]
 ///
-/// The `name` references which destination program to target for the 
+/// The `name` references which destination program to target for the
 /// message. This `name` must be provided as a `String` in the same format
 /// as that provided by the `Boson3` lowerer. (an array of UInts).
-/// 
+///
 /// and `arg`/`payload` is the argument to the destination program as
 /// part of this message, it is cloned over/migrated.
 ///
 /// If the destination program is in the `BlockedOnRecv` state it is
 /// rescheduled into the `Ready` state.
-/// 
+///
 /// The caller then changes state to `BlockedOnReply` with a newly
 /// allocated `call_tag` which the destination program must reply to for
 /// this program to wake up again.
-/// 
+///
 /// The returned value from this block_call is guaranteed to be something
 /// in this format:
-/// 
+///
 ///     [<top> `ret_arg`, `call_tag`]
-/// 
+///
 /// Generally this `call_tag` is not really useful, but provided for
 /// uniformity with `non_block_call` and can be ignored.
 pub fn cap_block_call<H: HeapAllocator, T: TagGenerator>(
     virtual_machine: &mut DaedalusVm<H, T>,
 ) -> Result<(), Box<dyn Error>> {
     let caller_tag = send_request(virtual_machine)?;
-    
+
     // Block the current program, run the next ready one (maybe our
     // destination program :) )
     run_next_ready(
@@ -472,12 +471,11 @@ pub fn cap_block_call<H: HeapAllocator, T: TagGenerator>(
     Ok(())
 }
 
-
 /// = `non_block_call`
 ///
 /// This capability is the same as `block_call` but it does not block
 /// the current program. The arguments are the same as `block_call`.
-/// 
+///
 /// This instead returns prematurely with the message pushed onto
 /// the destinations program's inbox with this in the current programs
 /// stack:
@@ -486,8 +484,8 @@ pub fn cap_block_call<H: HeapAllocator, T: TagGenerator>(
 ///
 /// This `call_tag` is important, as it can be used to match back the
 /// returned arguments from the destination program whenever this program
-/// yields. (which may be done on any yield/block). 
-/// 
+/// yields. (which may be done on any yield/block).
+///
 /// Be careful with `block_recv`! a non_block_call from the current program
 /// to the next program can have it's return appear in a `block_recv` as the
 /// non blocking response will just be a simple message in the current program's
@@ -503,5 +501,97 @@ pub fn cap_non_block_call<H: HeapAllocator, T: TagGenerator>(
     Ok(())
 }
 
+/// = `non_block_reply`
+///
+/// This capability sends a message back to the program associated with
+/// a `call_tag`, without blocking the current program.
+///
+/// The arguments to this capability are:
+///
+///     [<top> `ret_arg`, `call_tag`]
+///
+/// The `call_tag` must be one produced by this program's `block_recv`,
+/// These tags are scoped in the current program and single-use.
+///
+/// The `ret_arg` is migrated to the caller. If the caller is blocked in a
+/// `BlockedOnReply` state to this program, it is then changed to a `ReadyState` with
+/// these arguments in it's stack:
+///     
+///     [<top> `ret_arg`, `call_tag`]
+///
+/// Otherwise the reply is queued as a message in the caller's inbox with the
+/// corresponding tag that is associated with this request in the `caller`'s space.
+pub fn cap_non_block_reply<H: HeapAllocator, T: TagGenerator>(
+    virtual_machine: &mut DaedalusVm<H, T>,
+) -> Result<(), Box<dyn Error>> {
+    let reply = virtual_machine
+        .stack
+        .pop()
+        .ok_or(DaedalusCapErrors::StackUnderflowExpectedMessageArgPayload)?;
+    let tag_value = virtual_machine
+        .stack
+        .pop()
+        .ok_or(DaedalusCapErrors::StackUnderflowExpectedCallTag)?;
 
- 
+    // A tag value should be here!
+    let Value::Tag(tag) = tag_value else {
+        return Err(DaedalusCapErrors::ReplyTagExpected {
+            found_type: value_type_name(&tag_value),
+        })?;
+    };
+
+    let callee_tag = CallTag(tag);
+
+    let replier_heap = &mut virtual_machine.heap;
+    let state = &mut virtual_machine.capability_state;
+
+    // Find the corresponding call association, this is used to find
+    // which program to actually reply to and the call tag in that program's tagger space.
+    let association = state
+        .pending_replies
+        .remove(&callee_tag)
+        .ok_or(DaedalusCapErrors::UnknownReplyTag(callee_tag))?;
+
+    // Try find the caller, since we don't guarantee that it still exists, else
+    // it died~!! wehhh nooo shows my puppy tummy to u
+    let Some(caller_program) = state.programs.get_mut(association.caller_program) else {
+        return Err(DaedalusCapErrors::CallerGone(association.caller_program).into());
+    };
+
+    // Migrate the value to the caller, which we are replying with.
+    let reply = migrate(
+        replier_heap,
+        &mut caller_program.heap,
+        &mut caller_program.tagger,
+        reply,
+    );
+
+    // Wake up the caller with this message (set to `Ready`) if its Blocked on our tag,
+    // (could have sent something to us, and then asked another guy)
+    match caller_program.state {
+        ProgramState::BlockedOnReply { tag } if tag == association.caller_side_tag => {
+            Message {
+                tag: Some(association.caller_side_tag),
+                args: reply,
+            }
+            .deliver_onto(&mut caller_program.stack);
+
+            caller_program.state = ProgramState::Ready;
+            state.ready_queue.push_back(association.caller_program);
+        }
+        _ => {
+            // Otherwise, just push this as a message to the caller program's inbox,
+            // and wake it up if necessary (waiting for a inbox msg)
+            caller_program.inbox.push_back(Message {
+                tag: Some(association.caller_side_tag),
+                args: reply,
+            });
+
+            if caller_program.wake_recv() {
+                state.ready_queue.push_back(association.caller_program);
+            }
+        }
+    }
+
+    Ok(())
+}
