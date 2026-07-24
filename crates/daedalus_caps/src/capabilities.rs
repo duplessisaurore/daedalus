@@ -36,13 +36,26 @@
 //! same one used in the reply `Message`.)
 
 use alloc::{string::ToString, vec::Vec};
-use daedalus_program::{Program, StaticDaedalusImageVariants, get_program};
-use lepton3::lepton_vm::{
-    heap_allocator::{HeapAllocator, HeapItem},
-    values::Value,
-};
+use daedalus_program::{Program, StaticDaedalusImageVariants, StaticSourceLocation, get_phase, get_program};
+use lepton3::{VirtualMachine, lepton_vm::{
+    heap_allocator::{HeapAllocator, HeapItem}, tagger::TagGenerator, values::Value,
+}};
 
-use crate::errors::DaedalusCapErrors;
+use crate::{errors::DaedalusCapErrors, program::{DaedalusState, InactiveProgram, Message}};
+
+/// a DaedalusVM, this is a VM that daedalus runs.
+/// 
+/// We just make a type alias because else it'd be a lot
+/// of repeated code TwT
+pub type DaedalusVm<H, T> = VirtualMachine<
+    'static,
+    DaedalusState<StaticDaedalusImageVariants, H, T>,
+    StaticSourceLocation,
+    H,
+    T,
+    StaticDaedalusImageVariants,
+>;
+
 
 /// This decodes a program's name as a `Lepton3` value down
 /// into the program's name as a &'static str and returns the
@@ -79,4 +92,80 @@ fn program_from_value_name<H: HeapAllocator>(
     get_program(name).ok_or_else(
         || DaedalusCapErrors::CouldNotFindProgram { looked_up_program_name: name.to_string() }
     )
+}
+
+/// Advances the `current_phase` of the DaedalusState of a VM to its successor.
+/// 
+/// The `entry_argument` if Some is passed, and the next program is a newly
+/// started program, will be passed to the new program as part of it's entry
+/// point's arguments. If `None` and the next program is new, then no arg will
+/// be passed.
+/// 
+/// Regardless of the `entry_argument` if the next program is not new, a new
+/// "notification"-style `Message` will be added to it's inbox to signal this.
+fn advance_phase<H: HeapAllocator, T: TagGenerator>(
+    virtual_machine: &mut DaedalusVm<H, T>,
+    entry_argument: Option<Value>,
+) -> Result<(), DaedalusCapErrors> {
+    // Have we reached the end or not?
+    //
+    // todo: handle result with end for jumping to the entry point for running LionsOS
+    let next_phase = get_phase(virtual_machine.capability_state.current_phase.next)
+        .ok_or(DaedalusCapErrors::EndOfPhases)?;
+
+    // Name of the next program to start
+    let name = next_phase.program.name;
+ 
+    // We have finished the current program => next phase is the same one
+    if name == virtual_machine.capability_state.current_program {
+        // Deliver through the inbox to that program, as a signal to wake it back up
+        // on the advance case that isn't through `finish`
+        //
+        // We don't wakae up this program here because that should be handled by
+        // the fast-path in `block_recv` which checks for a new message before
+        // blocking fully
+        virtual_machine.capability_state.inbox.push_back(Message {
+            tag: None,
+            args: Value::Unit,
+        });
+    } else {
+        // Check if the program actually exists in the sets of programs
+        // (which means its been ran before and not exited)
+        let exists = virtual_machine
+            .capability_state
+            .programs
+            .contains_key(name);
+ 
+        match entry_argument {
+            // If the program doesn't exist, and we have some entry arg,
+            // spawn it with the arg
+            Some(argument) if !exists => {
+                let source_heap = &mut virtual_machine.heap;
+                let state = &mut virtual_machine.capability_state;
+ 
+                let program = InactiveProgram::from_image_with_name_and_arg(
+                    next_phase.program.image,
+                    name,
+                    argument,
+                    source_heap,
+                );
+ 
+                state.programs.insert(name, program);
+                state.ready_queue.push_back(name);
+            }
+ 
+            // Fresh spawn without an argument, this will spawn it for us
+            // and mark it as ready, or if already exists push the "notificaiton"-`Message`
+            // and make it ready.
+            _ => {
+                virtual_machine
+                    .capability_state
+                    .make_ready(name, next_phase.program.image);
+            }
+        }
+    }
+    
+    // Update the phase so we can advance to the next phase when the time comes :3
+    virtual_machine.capability_state.current_phase = next_phase;
+    Ok(())
 }

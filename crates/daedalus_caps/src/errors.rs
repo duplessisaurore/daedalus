@@ -16,17 +16,30 @@ pub enum DaedalusCapErrors {
     /// as per the capability, but a valid
     /// one could not be found
     ProgramNameExpected,
+
+    /// The next phase is `end`
+    /// 
+    /// This will be handled by finishing the boot process
+    /// and jumping to the entry point from the final program,
+    /// see `finish`.
+    EndOfPhases,
+
 }
 
 impl Display for DaedalusCapErrors {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
+            Self::EndOfPhases => {
+                write!(f, "daedalus reached the `end` of the boot phases!")
+            }
+
+
             Self::CouldNotFindProgram {
                 looked_up_program_name,
             } => {
                 write!(
                     f,
-                    "daedalus capability tried to look up program {looked_up_program_name}, but could not find any program with that name!"
+                    "daedalus capability tried to look up program `{looked_up_program_name}`, but could not find any program with that name!"
                 )
             }
             Self::ProgramNameExpected => write!(
