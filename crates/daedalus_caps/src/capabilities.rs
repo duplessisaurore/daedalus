@@ -41,7 +41,7 @@ use lepton3::{VirtualMachine, lepton_vm::{
     heap_allocator::{HeapAllocator, HeapItem}, tagger::TagGenerator, values::Value,
 }};
 
-use crate::{errors::DaedalusCapErrors, program::{DaedalusState, InactiveProgram, Message}};
+use crate::{errors::DaedalusCapErrors, program::{DaedalusState, InactiveProgram, Message, ProgramState, ProgramSwappable}};
 
 /// a DaedalusVM, this is a VM that daedalus runs.
 /// 
@@ -167,5 +167,74 @@ fn advance_phase<H: HeapAllocator, T: TagGenerator>(
     
     // Update the phase so we can advance to the next phase when the time comes :3
     virtual_machine.capability_state.current_phase = next_phase;
+    Ok(())
+}
+
+/// Forcibly advance phases until something is made runnable
+/// in the `Ready` queue, this does not pass any entry arguments
+/// 
+/// This does not handle inboxes since `block_recv` will have its
+/// own fast-path for that
+fn ensure_runnable<H: HeapAllocator, T: TagGenerator>(
+    virtual_machine: &mut DaedalusVm<H, T>,
+) -> Result<(), DaedalusCapErrors> {
+    while virtual_machine.capability_state.ready_queue.is_empty() {
+        advance_phase(virtual_machine, None)?;
+    }
+ 
+    Ok(())
+}
+
+/// Swaps the VM to the next program in the ready queue of the `DaedalusState`
+/// 
+/// This saves the old program with the state of `save_current` (if Some), this is
+/// an `Option` as we may not actually want to save the program, and if `None` the
+/// program is simply dropped.
+fn run_next_ready<H: HeapAllocator, T: TagGenerator>(
+    virtual_machine: &mut DaedalusVm<H, T>,
+    save_current: Option<ProgramState>,
+) -> Result<(), DaedalusCapErrors> {
+    // Collect gc to reduce unneeded space in storage
+    // NOTE: if really req memory, also maybe compress old program popped out of VM?
+    virtual_machine.gc_collect();
+ 
+    // Pick the next program and steal it out of the ready programs
+    // so we can hold it's full state to swap with
+    let next_program = {
+        let state = &mut virtual_machine.capability_state;
+ 
+        let next_name = state
+            .ready_queue
+            .pop_front()
+            .ok_or(DaedalusCapErrors::NothingToRunDeadLock)?;
+ 
+        state
+            .programs
+            .remove(next_name)
+            .expect("expected that ready queue programs always exist in programs map, invariant")
+    };
+ 
+    // Swap to the new program and get the old program out with its new state
+    let old_program = virtual_machine.swap(
+        next_program,
+        save_current.unwrap_or(ProgramState::Ready),
+    );
+ 
+    // If we should save the current program, shove it into the programs
+    // as an incative program, or drop it
+    let state = &mut virtual_machine.capability_state;
+    match save_current {
+        None => {},
+        Some(program_state) => {
+            let previous_name = old_program.name;
+ 
+            if program_state == ProgramState::Ready {
+                state.ready_queue.push_back(previous_name);
+            }
+ 
+            state.programs.insert(previous_name, old_program);
+        }
+    }
+ 
     Ok(())
 }

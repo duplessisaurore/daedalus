@@ -18,12 +18,18 @@ pub enum DaedalusCapErrors {
     ProgramNameExpected,
 
     /// The next phase is `end`
-    /// 
+    ///
     /// This will be handled by finishing the boot process
     /// and jumping to the entry point from the final program,
     /// see `finish`.
     EndOfPhases,
 
+    /// The scheduler had nothing runnable that could be found
+    /// when trying to run something next...
+    ///
+    /// This should only happen when everything is blocked in a
+    /// deadlock!
+    NothingToRunDeadLock,
 }
 
 impl Display for DaedalusCapErrors {
@@ -32,7 +38,6 @@ impl Display for DaedalusCapErrors {
             Self::EndOfPhases => {
                 write!(f, "daedalus reached the `end` of the boot phases!")
             }
-
 
             Self::CouldNotFindProgram {
                 looked_up_program_name,
@@ -46,6 +51,12 @@ impl Display for DaedalusCapErrors {
                 f,
                 "daedalus capability expected a program name as a value, found an invalid one!"
             ),
+            Self::NothingToRunDeadLock => {
+                write!(
+                    f,
+                    "daedalus scheduler could find no runnable program, every program must be blocked in a deadlock!"
+                )
+            }
         }
     }
 }
