@@ -14,11 +14,15 @@
 
 extern crate alloc;
 
-// Data migration from one heap allocator's data
-// to another heap allocator to permit for capability
-// calls with heap values.
+/// Data migration from one heap allocator's data
+/// to another heap allocator to permit for capability
+/// calls with heap values.
 pub mod migrate;
 
-// Programs abstraction, essentially one VM instance
-// that we can swap between
+/// Programs abstraction, essentially one VM instance
+/// that we can swap between
 pub mod program;
+
+/// Capabililties that provide for IPC between programs
+/// for the full daedalus bootloader functionality
+pub mod capabilities; 
