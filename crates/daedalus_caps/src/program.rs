@@ -200,6 +200,10 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
     ///
     /// The `arg_heap_alloc` is required for the full recursive
     /// migration over into the new `InactiveProgram`.
+    /// 
+    /// This does not guarantee the argument is passed to the new
+    /// program if the new program's entry point does not take any
+    /// arguments.
     #[must_use]
     pub fn from_image_with_name_and_arg(
         image: &'static I,
@@ -210,21 +214,23 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
         let mut initial_machine_state =
             VirtualMachine::new(image, Vec::new(), H::default(), T::default(), ());
 
-        // Migrate over the argument if necessary over to the new initial machine state which we package up
-        // for the `InactiveProgram`
-        initial_machine_state.stack.push(migrate(
-            arg_heap_alloc,
-            &mut initial_machine_state.heap,
-            &mut initial_machine_state.tagger,
-            arg,
-        ));
+        if let Some(entry_function) = image.function_table().get(image.header().entry_point as usize) && entry_function.arg_count > 0 {
+            // Migrate over the argument if necessary over to the new initial machine state which we package up
+            // for the `InactiveProgram`
+            initial_machine_state.stack.push(migrate(
+                arg_heap_alloc,
+                &mut initial_machine_state.heap,
+                &mut initial_machine_state.tagger,
+                arg,
+            ));
 
-        // Call the entry point in the new image, this should succeed...
-        // we also pass in our one argument here
-        let entry = image.header().entry_point as usize;
-        initial_machine_state
-            .call_function(entry, 1)
-            .expect("expects entering the entry point to succeed");
+            // Call the entry point in the new image, this should succeed...
+            // we also pass in our one argument here
+            let entry = image.header().entry_point as usize;
+            initial_machine_state
+                .call_function(entry, 1)
+                .expect("expects entering the entry point to succeed");
+        }
 
         Self::from_initial_machine(image, name, initial_machine_state)
     }
