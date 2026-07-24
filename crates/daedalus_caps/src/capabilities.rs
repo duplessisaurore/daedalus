@@ -379,3 +379,100 @@ pub fn cap_finish<H: HeapAllocator, T: TagGenerator>(
     run_next_ready(virtual_machine, None)?;
     Ok(())
 }
+
+/// = `block_recv`
+///
+/// This capability blocks the current program until a message is
+/// received in its inbox, delivering it as:
+///
+///     [<top> `arg`, `call_tag`]
+/// 
+/// To the current stack of the program.
+/// 
+/// This `Message` can either be a request to the current program `call_tag`
+/// is a tag, or a "notification" from daedalus with a `Unit` in the `call_tag`.
+///
+/// If the inbox already holds a message it is delivered immediately
+/// with no program switching and state changing (fast-path). 
+/// 
+/// Otherwise the program's state is changed to `BlockedOnRecv` and the next
+/// program runs.
+///
+/// For requests, the `call_tag` is important and should not be lost as
+/// the caller may not ever be woken up with the corresponding reply is never
+/// sent back to this caller with the `call_tag`.
+pub fn cap_block_recv<H: HeapAllocator, T: TagGenerator>(
+    virtual_machine: &mut DaedalusVm<H, T>,
+) -> Result<(), Box<dyn Error>> {
+    loop {
+        // Check if there is already something in the inbox (fast-path)
+        if let Some(message) = virtual_machine.capability_state.inbox.pop_front() {
+
+            // Ok! we have something, add it to our stack and return
+            message.deliver_onto(&mut virtual_machine.stack);
+            return Ok(());
+        }
+        
+        if !virtual_machine.capability_state.ready_queue.is_empty() {
+            break;
+        }
+ 
+        // Nothing to receive and nobody to run, in this case we are
+        // advancing the phase to the next phase to continue running the boot process
+        // (else we will instantly halt)
+        advance_phase(virtual_machine, None)?;
+    }
+    
+    // There is no message to be recieved by the program, block it and run the next guy.
+    run_next_ready(virtual_machine, Some(ProgramState::BlockedOnRecv))?;
+    Ok(())
+}
+
+ 
+/// = `block_call`
+///
+/// This capability blocks the current program and pushes a message
+/// into the inbox of the destination program. the arguments to this
+/// are:
+///
+///     [<top> `arg`, `name`]
+///
+/// The `name` references which destination program to target for the 
+/// message. This `name` must be provided as a `String` in the same format
+/// as that provided by the `Boson3` lowerer. (an array of UInts).
+/// 
+/// and `arg`/`payload` is the argument to the destination program as
+/// part of this message, it is cloned over/migrated.
+///
+/// If the destination program is in the `BlockedOnRecv` state it is
+/// rescheduled into the `Ready` state.
+/// 
+/// The caller then changes state to `BlockedOnReply` with a newly
+/// allocated `call_tag` which the destination program must reply to for
+/// this program to wake up again.
+/// 
+/// The returned value from this block_call is guaranteed to be something
+/// in this format:
+/// 
+///     [<top> `ret_arg`, `call_tag`]
+/// 
+/// Generally this `call_tag` is not really useful, but provided for
+/// uniformity with `non_block_call` and can be ignored.
+pub fn cap_block_call<H: HeapAllocator, T: TagGenerator>(
+    virtual_machine: &mut DaedalusVm<H, T>,
+) -> Result<(), Box<dyn Error>> {
+    let caller_tag = send_request(virtual_machine)?;
+    
+    // Block the current program, run the next ready one (maybe our
+    // destination program :) )
+    run_next_ready(
+        virtual_machine,
+        Some(ProgramState::BlockedOnReply { tag: caller_tag }),
+    )?;
+    Ok(())
+}
+
+
+
+
+ 
