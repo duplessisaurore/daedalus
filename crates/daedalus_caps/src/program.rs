@@ -19,6 +19,16 @@ use lepton3::{
 
 use crate::migrate::migrate;
 
+/// A unique program's call reply association
+#[derive(Debug, Clone, Copy)]
+pub struct CallAssociation {
+    /// This is the tag in the caller side (which we are replying to)
+    pub caller_side_tag: CallTag,
+
+    /// This is the name of the caller's program which we return to
+    pub caller_program: &'static str
+}
+
 /// A unique call's Tag which associates a reply back
 /// to some program
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone, Copy)]
@@ -29,6 +39,11 @@ pub struct CallTag(Tag);
 pub struct Message {
     /// The unique call tag associated with this new message
     /// to the inbox so the receiever can reply
+    /// 
+    /// `None` marks a message that will have it's `call_tag`
+    /// be delivered as a `Unit` This is for cases where a program
+    /// is woken up in the `block_recv` state by not a call (for
+    /// example with a `finish`)
     pub tag: CallTag,
 
     /// The argument the caller passed
@@ -47,11 +62,12 @@ pub enum ProgramState {
 
     /// This program is blocked and is waiting for a `reply`
     /// on one of it's calls to a different program
-    BlockedOnReply { tag: Tag },
+    BlockedOnReply { tag: CallTag },
 
     /// Ready, this program can execute and is waiting
     /// to be picked up
     Ready,
+
     // Running is not here since the current VM program
     // is the running one.
 }
@@ -103,8 +119,8 @@ pub struct InactiveProgram<
     /// Pending replies for the inactive program
     ///
     /// This is a map of the tag allocated for its calls back to the
-    /// program's name that called it
-    pub pending_replies: HashMap<CallTag, &'static str>,
+    /// program that called it
+    pub pending_replies: HashMap<CallTag, CallAssociation>,
 
     /// Pending messages to the inactive program
     ///
@@ -281,8 +297,8 @@ pub struct DaedalusState<I: StaticLeptonImage + 'static, H: HeapAllocator, T: Ta
     /// Pending replies for the current phase being executed
     ///
     /// This is a map of the tag allocated for this call back to the
-    /// program's name that called it
-    pub pending_replies: HashMap<CallTag, &'static str>,
+    /// program that called it.
+    pub pending_replies: HashMap<CallTag, CallAssociation>,
 
     /// Pending messages to the current phase being execeuted
     ///

@@ -60,5 +60,40 @@
 /// the argument that is passed to the destination program through this message 
 /// (see `block_recv`).
 
+/// = `non_block_call`
+/// 
+/// This capability is similar to `block_call` but it does not block
+/// the current program.
+/// 
+/// The arguments to `block_call` are the same, however the capability
+/// pushes a `call_tag` onto the stack of the current program.
+/// 
+/// This `call_tag` is important as whenever the program yields after
+/// doing a `non_block_call`, the specific response from which `non_block_call`
+/// will need to be matched by the `call_tag`.
+
+
+/// = `non_block_reply`
+/// 
+/// This capability sends a message back to the inbox of some program
+/// associated with a `call_tag`, unblocking it if it's blocked on `BlockOnReply`
+/// and setting it into the `Ready` state.
+/// 
+/// This does not block the current program.
+/// 
+/// The `non_block_reply` capability takes arguments in the following order:
+/// 
+///     [<top> `ret_arg`, `call_tag`]
+/// 
+/// The `call_tag` must be one produced by `wait_recv`. This is used to reply
+/// back to a specific caller of this program. The `ret_arg` is then pushed onto
+/// the stack of the caller, alongside a unique call tag associated with this call,
+/// such that in the perspective of the caller the stack is as follows:
+/// 
+///     [<top> `ret_arg`, `call_tag`]
+/// 
+/// If the caller send this original `call_tag` through a `non_block_call`, the
+/// caller can then match this using their corresponding `call_tag` produced by the
+/// `non_block_call`.
 
 
