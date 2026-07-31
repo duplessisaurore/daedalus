@@ -6,7 +6,7 @@ use core::{error::Error, fmt::Display};
 
 use alloc::string::String;
 
-use crate::program::CallTag;
+use crate::{memory::RegionPermissions, program::CallTag};
 
 #[derive(Debug)]
 pub enum DaedalusCapErrors {
@@ -74,7 +74,45 @@ pub enum DaedalusCapErrors {
 
     /// These permissison bits for memory regions were attempted to be
     /// set but they do not currently exist
-    InvalidRegionPermission(u64)
+    InvalidRegionPermission(u64),
+
+    /// This region overflowed the available memory space and cannot validly
+    /// exist in the system
+    RegionOverflow { base: usize, len: usize },
+
+    /// This region is attempting to be created in a location in which it
+    /// would write over the memory of daedalus, and is not allowed.
+    WritableOverDaedalus { base: usize, len: usize },
+
+    /// Attempted to access a region with a permissions
+    /// mismatch between the attempted access and the region's
+    /// actual permissions.
+    PermissionDenied {
+        need: RegionPermissions,
+        held: RegionPermissions,
+    },
+
+    /// This access overflowed the available space on the system such that
+    /// the end cannot even exist in the system's memory !! wuehhh
+    AccessOverflow { 
+        offset: usize, 
+        width: usize 
+    },
+
+    /// This access exceeded the length of the region
+    OutOfRegion {
+        offset: usize,
+        width: usize,
+        len: usize
+    },
+
+    /// This was an unaligned access to a region at
+    /// some address, essentially the offset + region base
+    /// was not aligned to the specified width of the access.
+    Misaligned {
+        address: usize,
+        width: usize
+    },
 }
 
 impl Display for DaedalusCapErrors {
@@ -162,6 +200,43 @@ impl Display for DaedalusCapErrors {
                     "daedalus expected a valid set of permission bits in provided permission, however `{bits}` contained invalid permission bits!"
                 )
             }
+            Self::RegionOverflow { base, len } => {
+                write!(
+                    f,
+                    "a region was attempted to be created which overflows the available memory of the system, with base `{base}` and length `{len}`."
+                )
+            }
+            Self::WritableOverDaedalus { base, len } => {
+                write!(
+                    f,
+                    "a region was attempted to be created which has `write` permission and overlaps with the memory of daedalus! with base `{base}` and length `{len}`."
+                )
+            }
+            Self::PermissionDenied { need, held } => {
+                write!(
+                    f,
+                    "region access permission denied: attempted to access with permissions `{need}`, actual held region permissions `{held}`."
+                )
+            }
+            Self::AccessOverflow { offset, width } => {
+                write!(
+                    f,
+                    "a access was attempted which overflows the available memory of the system, with offset `{offset}` and width `{width}`."
+                )
+            }
+            Self::OutOfRegion { offset, width, len } => {
+                write!(
+                    f,
+                    "a region access was attempted with offset `{offset}` and width `{width}`, however this exceeds the bounds of the region which has length `{len}`."
+                )
+            }
+
+            Self::Misaligned { address, width } => {
+                write!(
+                    f,
+                    "a region access was attempted at address `{address}`, however this address is not aligned to the requested access width of `{width}` bytes."
+                )
+            }            
         }
     }
 }
