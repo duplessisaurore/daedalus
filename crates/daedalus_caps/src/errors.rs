@@ -94,25 +94,19 @@ pub enum DaedalusCapErrors {
 
     /// This access overflowed the available space on the system such that
     /// the end cannot even exist in the system's memory !! wuehhh
-    AccessOverflow { 
-        offset: usize, 
-        width: usize 
-    },
+    AccessOverflow { offset: usize, width: usize },
 
     /// This access exceeded the length of the region
     OutOfRegion {
         offset: usize,
         width: usize,
-        len: usize
+        len: usize,
     },
 
     /// This was an unaligned access to a region at
     /// some address, essentially the offset + region base
     /// was not aligned to the specified width of the access.
-    Misaligned {
-        address: usize,
-        width: usize
-    },
+    Misaligned { address: usize, width: usize },
 }
 
 impl Display for DaedalusCapErrors {
@@ -230,13 +224,12 @@ impl Display for DaedalusCapErrors {
                     "a region access was attempted with offset `{offset}` and width `{width}`, however this exceeds the bounds of the region which has length `{len}`."
                 )
             }
-
             Self::Misaligned { address, width } => {
                 write!(
                     f,
                     "a region access was attempted at address `{address}`, however this address is not aligned to the requested access width of `{width}` bytes."
                 )
-            }            
+            }
         }
     }
 }

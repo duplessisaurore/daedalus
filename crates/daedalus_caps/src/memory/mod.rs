@@ -171,7 +171,7 @@ impl Region {
 
         // Ensure the address is aligned at this width we are
         // accessing at (grrr)
-        if width != 0 && (self.base + offset) % width != 0 {
+        if width != 0 && !(self.base + offset).is_multiple_of(width) {
             return Err(DaedalusCapErrors::Misaligned {
                 address: self.base + offset,
                 width,
