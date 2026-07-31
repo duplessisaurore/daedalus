@@ -22,6 +22,10 @@ pub mod program;
 /// for the full daedalus bootloader functionality
 pub mod ipc;
 
+/// Capabilities that provide for memory access from
+/// programs
+pub mod memory;
+
 /// Errors that can occur during the running of the IPC
 /// capabilities/phase driving caps
 pub mod errors;

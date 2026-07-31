@@ -71,6 +71,10 @@ pub enum DaedalusCapErrors {
     /// Attempted to reply to this caller, but the caller is now gone ? :(
     /// This is the name of the caller.
     CallerGone(&'static str),
+
+    /// These permissison bits for memory regions were attempted to be
+    /// set but they do not currently exist
+    InvalidRegionPermission(u64)
 }
 
 impl Display for DaedalusCapErrors {
@@ -150,6 +154,12 @@ impl Display for DaedalusCapErrors {
                 write!(
                     f,
                     "daedalus expected to find a reply target `{name:?}`, but there is no longer a running program by the time we are replying to it!"
+                )
+            }
+            Self::InvalidRegionPermission(bits) => {
+                write!(
+                    f,
+                    "daedalus expected a valid set of permission bits in provided permission, however `{bits}` contained invalid permission bits!"
                 )
             }
         }
