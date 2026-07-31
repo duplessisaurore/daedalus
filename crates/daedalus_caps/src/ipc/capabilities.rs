@@ -53,7 +53,7 @@ use lepton3::{
 
 use crate::{
     errors::DaedalusCapErrors,
-    migrate::migrate,
+    ipc::migrate::migrate,
     program::{
         CallAssociation, CallTag, DaedalusState, InactiveProgram, Message, ProgramState,
         ProgramSwappable,

@@ -18,7 +18,7 @@ use lepton3::{
     },
 };
 
-use crate::migrate::migrate;
+use crate::ipc::migrate::migrate;
 
 /// A unique program's call reply association
 #[derive(Debug, Clone, Copy)]
@@ -43,7 +43,7 @@ pub struct Message {
     ///
     /// `None` marks a message that will have it's `call_tag`
     /// be delivered as a `Unit`.
-    /// 
+    ///
     /// These are for notifications from `daedalus` rather than
     /// from a call itself, and cannot be replied to.
     pub tag: Option<CallTag>,
@@ -137,7 +137,6 @@ pub struct InactiveProgram<
     pub type_tags: TypeTags,
 
     // View `DaedalusState` for the meaning of these.
-    
     pub pending_replies: HashMap<CallTag, CallAssociation>,
     pub inbox: VecDeque<Message>,
 }
@@ -234,9 +233,9 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
                 initial_machine_state
                     .call_function(entry, 1)
                     .expect("expects entering the entry point to succeed");
-            },
+            }
 
-            _ => unreachable!("daedalus build validation handles this casee")
+            _ => unreachable!("daedalus build validation handles this casee"),
         }
 
         Self::from_initial_machine(image, name, initial_machine_state)
@@ -388,7 +387,7 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Daedalus
     /// Ensures `name` exists as a program and sets it up as ready if it should be.
     ///
     /// This will either find `name` in the current set of programs and
-    /// mark it as ready if it is ready to be ready (e.g BlockOnRecv has inbox msg). 
+    /// mark it as ready if it is ready to be ready (e.g BlockOnRecv has inbox msg).
     /// or create a new program from the image associated with the program `name`.
     ///
     /// This new program from the image associated
