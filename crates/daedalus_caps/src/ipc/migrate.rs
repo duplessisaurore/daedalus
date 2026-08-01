@@ -8,7 +8,7 @@ use hashbrown::HashMap;
 use lepton3::lepton_vm::{
     heap_allocator::{HeapAllocator, HeapItem},
     tagger::TagGenerator,
-    values::Value,
+    values::{Tag, Value},
 };
 
 /// This migrates the referred to value between two heap allocators
@@ -36,13 +36,25 @@ pub fn migrate(
     // and exploding the heap.
     let mut forwarded: HashMap<usize, usize> = HashMap::new();
 
+    // These tags have already been migrated, we don't double migrate a tag
+    // as it may have some concrete meaning (two points are the same type?)
+    let mut forwarded_tags: HashMap<Tag, Tag> = HashMap::new();
+
     // These values have been copied over from `a` to `b` but may
     // have internal values (object, arrays) which still need to
     // be copied over.
     let mut pending: Vec<usize> = Vec::new();
 
     // Copy the initial value over
-    let migrated = migrate_value(a, b, &mut forwarded, &mut pending, migratee);
+    let migrated = migrate_value(
+        a,
+        b,
+        t,
+        &mut forwarded,
+        &mut forwarded_tags,
+        &mut pending,
+        migratee,
+    );
 
     // Migrate all of the pending values
     while let Some(pending_item) = pending.pop() {
@@ -54,16 +66,32 @@ pub fn migrate(
             HeapItem::Object { fields, tag } => {
                 // Migrate all of the fields over from an object
                 for val in fields {
-                    *val = migrate_value(a, b, &mut forwarded, &mut pending, *val);
+                    *val = migrate_value(
+                        a,
+                        b,
+                        t,
+                        &mut forwarded,
+                        &mut forwarded_tags,
+                        &mut pending,
+                        *val,
+                    );
                 }
 
                 // Migrate the tag over to a new one
-                *tag = t.allocate_tag();
+                *tag = migrate_tag(*tag, t, &mut forwarded_tags);
             }
             HeapItem::Array(fields) => {
                 // Migrate all of the fields over from an array
                 for val in fields {
-                    *val = migrate_value(a, b, &mut forwarded, &mut pending, *val);
+                    *val = migrate_value(
+                        a,
+                        b,
+                        t,
+                        &mut forwarded,
+                        &mut forwarded_tags,
+                        &mut pending,
+                        *val,
+                    );
                 }
             }
             HeapItem::Forwarded(_) => {
@@ -89,7 +117,9 @@ pub fn migrate(
 fn migrate_value(
     a: &impl HeapAllocator,
     b: &mut impl HeapAllocator,
+    t: &mut impl TagGenerator,
     forwarded: &mut HashMap<usize, usize>,
+    forwarded_tags: &mut HashMap<Tag, Tag>,
     pending: &mut Vec<usize>,
     val: Value,
 ) -> Value {
@@ -100,12 +130,36 @@ fn migrate_value(
         | Value::Int(_)
         | Value::UInt(_)
         | Value::Float(_)
-        | Value::Bool(_)
-        | Value::Tag(_)) => simple_migration,
+        | Value::Bool(_)) => simple_migration,
+
+        // Tags do not make sense to be migrated in their current form,
+        // as they are unique per tag-space.
+        //
+        // In order to keep this meaning intact and prevent any random collision
+        // into the dest programs tag space, we allocate a new tag.
+        Value::Tag(tag) => Value::Tag(migrate_tag(tag, t, forwarded_tags)),
 
         Value::Object(old_idx) => Value::Object(copy_item(a, b, forwarded, pending, old_idx)),
         Value::Array(old_idx) => Value::Array(copy_item(a, b, forwarded, pending, old_idx)),
     }
+}
+
+/// Migrates one tag, adding it to the provided forwarded tags
+/// hashmap, if its not in it, else retrieving the one in it.
+pub fn migrate_tag(
+    tag: Tag,
+    t: &mut impl TagGenerator,
+    forwarded_tags: &mut HashMap<Tag, Tag>,
+) -> Tag {
+    if let Some(&forwarded_tag) = forwarded_tags.get(&tag) {
+        return forwarded_tag;
+    }
+
+    // Not in forwarded tag, allocate new one
+    let new_tag = t.allocate_tag();
+    forwarded_tags.insert(tag, new_tag);
+
+    new_tag
 }
 
 /// Copies an item over from `a` to `b` returning the position in `b`
