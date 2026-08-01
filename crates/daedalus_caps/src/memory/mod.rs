@@ -16,6 +16,13 @@ unsafe extern "C" {
     static __daedalus_end: u8;
 }
 
+/// Generic abstraction layer trait
+/// for architecture specific elements
+///
+/// if an arch impls this trait, they impl
+/// all the `Daedalus` memory ops.
+pub mod arch;
+
 /// A unique memory region's tag handle which is
 /// associated with some region
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone, Copy)]

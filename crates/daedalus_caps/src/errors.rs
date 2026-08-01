@@ -107,6 +107,10 @@ pub enum DaedalusCapErrors {
     /// some address, essentially the offset + region base
     /// was not aligned to the specified width of the access.
     Misaligned { address: usize, width: usize },
+
+    /// This access width is an invalid one and does not match
+    /// the permitted 1,2,4,8 bytes allowed.
+    InvalidAccessWidth { width: usize },
 }
 
 impl Display for DaedalusCapErrors {
@@ -228,6 +232,12 @@ impl Display for DaedalusCapErrors {
                 write!(
                     f,
                     "a region access was attempted at address `{address}`, however this address is not aligned to the requested access width of `{width}` bytes."
+                )
+            }
+            Self::InvalidAccessWidth { width } => {
+                write!(
+                    f,
+                    "attempted an access with invalid width of `{width}` bytes, must be one of [1, 2, 4, 8]."
                 )
             }
         }
