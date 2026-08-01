@@ -459,7 +459,18 @@ fn main() {
 
         // Build the grants table for this program from it's manifest.
         let mut grants_table_literal = String::from("[");
+        let mut seen_grants = HashSet::new();
         for grant in &manifest.grants {
+
+            if seen_grants.contains(&grant.role) {
+            panic!(
+                "\x1b[93mprogram `{}`: contains duplicate grants of name {}, this is not permitted\x1b[0m",
+                manifest.name,
+                grant.role,
+            )
+            }
+            seen_grants.insert(&grant.role);
+
             // Expression for the GrantBase
             let base_expr = match grant.base {
                 GrantBaseSpec::Absolute(base) => format!("GrantBase::Absolute({base}usize)"),

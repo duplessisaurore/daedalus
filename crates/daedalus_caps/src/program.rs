@@ -4,7 +4,7 @@
 
 use alloc::{collections::vec_deque::VecDeque, vec::Vec};
 use daedalus_program::{
-    Phase, StaticDaedalusImageVariants, StaticLeptonImage, StaticSourceLocation,
+    Grant, Phase, StaticDaedalusImageVariants, StaticLeptonImage, StaticSourceLocation,
 };
 use hashbrown::{HashMap, hash_map::Entry};
 use lepton3::{
@@ -18,7 +18,11 @@ use lepton3::{
     },
 };
 
-use crate::ipc::migrate::migrate;
+use crate::{
+    errors::DaedalusCapErrors,
+    ipc::migrate::migrate,
+    memory::{MintedGrantRegions, Region, RegionHandle, mint_grants},
+};
 
 /// A unique program's call reply association
 #[derive(Debug, Clone, Copy)]
@@ -139,6 +143,8 @@ pub struct InactiveProgram<
     // View `DaedalusState` for the meaning of these.
     pub pending_replies: HashMap<CallTag, CallAssociation>,
     pub inbox: VecDeque<Message>,
+    pub regions: HashMap<RegionHandle, Region>,
+    pub named_grants: HashMap<&'static str, RegionHandle>,
 }
 
 pub trait ProgramSwappable<H: HeapAllocator = HeapAllocatorImpl, T: TagGenerator = TagGeneratorImpl>
@@ -173,7 +179,11 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
     ///
     /// This `Program` has no arguments in it's entry point function.
     #[must_use]
-    pub fn from_image_with_name(image: &'static I, name: &'static str) -> Self {
+    pub fn from_image_with_name(
+        image: &'static I,
+        name: &'static str,
+        grants: &'static [Grant],
+    ) -> Result<Self, DaedalusCapErrors> {
         let mut initial_machine_state =
             VirtualMachine::new(image, Vec::new(), H::default(), T::default(), ());
 
@@ -181,9 +191,9 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
         let entry = image.header().entry_point as usize;
         initial_machine_state
             .call_function(entry, 0)
-            .expect("expects entering the entry point to succeed");
+            .map_err(|_| DaedalusCapErrors::FailedToEnterProgramEntryPoint { name })?;
 
-        Self::from_initial_machine(image, name, initial_machine_state)
+        Self::from_initial_machine(image, name, grants, initial_machine_state)
     }
 
     /// Does the same as `from_image_with_name` but
@@ -201,9 +211,10 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
     pub fn from_image_with_name_and_arg(
         image: &'static I,
         name: &'static str,
+        grants: &'static [Grant],
         arg: Value,
         arg_heap_alloc: &mut H,
-    ) -> Self {
+    ) -> Result<Self, DaedalusCapErrors> {
         let mut initial_machine_state =
             VirtualMachine::new(image, Vec::new(), H::default(), T::default(), ());
 
@@ -213,14 +224,14 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
         let arg_count = image
             .function_table()
             .get(entry)
-            .expect("entry point must exist in the function table")
+            .expect("validator ensures that entry point must exist in the function table")
             .arg_count;
 
         match arg_count {
             // Entry takes no arguments, drop the arg, but still meow and purr andd mrrrprr everywhere
             0 => initial_machine_state
                 .call_function(entry, 0)
-                .expect("expects entering the entry point to succeed"),
+                .map_err(|_| DaedalusCapErrors::FailedToEnterProgramEntryPoint { name })?,
 
             // Actual argument, call it with 1 arg.
             1 => {
@@ -232,13 +243,13 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
                 ));
                 initial_machine_state
                     .call_function(entry, 1)
-                    .expect("expects entering the entry point to succeed");
+                    .map_err(|_| DaedalusCapErrors::FailedToEnterProgramEntryPoint { name })?
             }
 
             _ => unreachable!("daedalus build validation handles this casee"),
         }
 
-        Self::from_initial_machine(image, name, initial_machine_state)
+        Self::from_initial_machine(image, name, grants, initial_machine_state)
     }
 
     /// Creates a new `InactiveProgram` that can be swapped into from
@@ -251,9 +262,16 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
     fn from_initial_machine(
         image: &'static I,
         name: &'static str,
-        initial_machine_state: VirtualMachine<'_, (), StaticSourceLocation, H, T, I>,
-    ) -> Self {
-        Self {
+        grants: &'static [Grant],
+        mut initial_machine_state: VirtualMachine<'_, (), StaticSourceLocation, H, T, I>,
+    ) -> Result<Self, DaedalusCapErrors> {
+        // Turn the grants into `Regions` in our new initial machine state.
+        let MintedGrantRegions {
+            regions,
+            named_grants,
+        } = mint_grants(grants, &mut initial_machine_state.tagger)?;
+
+        Ok(Self {
             name,
             state: ProgramState::Ready,
             image,
@@ -266,7 +284,9 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
             type_tags: initial_machine_state.type_tags,
             pending_replies: HashMap::new(),
             inbox: VecDeque::new(),
-        }
+            regions,
+            named_grants,
+        })
     }
 
     /// If this program is blocked in `block_recv` and has an
@@ -327,6 +347,11 @@ impl<H: HeapAllocator, T: TagGenerator> ProgramSwappable<H, T>
 
             inbox: core::mem::replace(&mut self.capability_state.inbox, program.inbox),
             name: core::mem::replace(&mut self.capability_state.current_program, program.name),
+            regions: core::mem::replace(&mut self.capability_state.regions, program.regions),
+            named_grants: core::mem::replace(
+                &mut self.capability_state.named_grants,
+                program.named_grants,
+            ),
         }
     }
 }
@@ -365,6 +390,14 @@ pub struct DaedalusState<I: StaticLeptonImage + 'static, H: HeapAllocator, T: Ta
 
     /// Names of programs currently in a `Ready` state, in order
     pub ready_queue: VecDeque<&'static str>,
+
+    /// The set of regions this program owns, essentially the memory
+    /// regions it is allowed to access, by handle.
+    pub regions: HashMap<RegionHandle, Region>,
+
+    /// All regions initially come from "grants" which are *named*
+    /// this is how programs initially get the handles for their regions.
+    pub named_grants: HashMap<&'static str, RegionHandle>,
 }
 
 impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> DaedalusState<I, H, T> {
@@ -373,15 +406,29 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Daedalus
     ///
     /// It is expected that this is instantly used in a `VirtualMachine`
     /// with the current_phase properly matching the image else doom will occur.
-    pub fn new(current_phase: &'static Phase<I>) -> Self {
-        Self {
+    pub fn new(
+        current_phase: &'static Phase<I>,
+        tagger: &mut T,
+    ) -> Result<Self, DaedalusCapErrors> {
+        let program = current_phase.program;
+
+        // The initial program passed in is going to need
+        // its regions set up too from grants, so do that.
+        let MintedGrantRegions {
+            regions,
+            named_grants,
+        } = mint_grants(program.grants, tagger)?;
+
+        Ok(Self {
             current_program: current_phase.program.name,
             current_phase,
             programs: HashMap::new(),
             ready_queue: VecDeque::new(),
             pending_replies: HashMap::new(),
             inbox: VecDeque::new(),
-        }
+            regions,
+            named_grants
+        })
     }
 
     /// Ensures `name` exists as a program and sets it up as ready if it should be.
@@ -389,9 +436,9 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Daedalus
     /// This will either find `name` in the current set of programs and
     /// mark it as ready if it is ready to be ready (e.g BlockOnRecv has inbox msg).
     /// or create a new program from the image associated with the program `name`.
-    ///
-    /// This new program from the image associated
-    pub fn make_ready(&mut self, name: &'static str, image: &'static I) {
+    /// 
+    /// The grants are used to setup the initial regions for this program.
+    pub fn make_ready(&mut self, name: &'static str, image: &'static I, grants: &'static [Grant]) -> Result<(), DaedalusCapErrors> {
         match self.programs.entry(name) {
             Entry::Occupied(mut entry) => {
                 // Mark as ready and push onto the queue
@@ -417,10 +464,12 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Daedalus
 
             // Create new image and push onto the queue
             Entry::Vacant(entry) => {
-                entry.insert(InactiveProgram::from_image_with_name(image, name));
+                entry.insert(InactiveProgram::from_image_with_name(image, name, grants)?);
                 self.ready_queue.push_back(name);
             }
-        }
+        };
+
+        Ok(())
     }
 }
 

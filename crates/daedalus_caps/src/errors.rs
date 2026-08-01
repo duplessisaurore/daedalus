@@ -112,6 +112,28 @@ pub enum DaedalusCapErrors {
     /// This access width is an invalid one and does not match
     /// the permitted 1,2,4,8 bytes allowed.
     InvalidAccessWidth { width: usize },
+
+    /// Attempted to create a `Region` from a `Grant` that had a base up to ToStartDaedalus
+    /// but the grant exceeded the actual starting address of daedalus!
+    GrantBaseAboveDaedalus {
+        role: &'static str,
+        base: usize
+    },
+
+    /// Attempted to create a `Grant` up to the end of memory, except the base
+    /// of the grant actually already excceeded the end of memory!
+    GrantBaseOutsideMemory {
+        role: &'static str,
+        base: usize
+    },
+
+    /// Attempted to create a new image with name `name`, which requires entering
+    /// its entry point function, however this failed! and we could not enter its entry
+    /// point function.
+    FailedToEnterProgramEntryPoint {
+        name: &'static str
+    }
+   
 }
 
 impl Display for DaedalusCapErrors {
@@ -242,7 +264,25 @@ impl Display for DaedalusCapErrors {
                     "attempted an access with invalid width of `{width}` bytes, must be one of [1, 2, 4, 8]."
                 )
             }
-        }
+            Self::GrantBaseAboveDaedalus { role, base } => {
+                write!(
+                    f,
+                    "the grant with role `{role}` and length `to_start_daedalus` was given base `{base}` which exceeds the starting address of daedalus."
+                )
+            }
+            Self::GrantBaseOutsideMemory { role, base } => {
+                write!(
+                    f,
+                    "the grant with role `{role}` and length `to_end_of_memory` was given base `{base}`, but this is at or past the end of physical memory as specified by daedalus."
+                )
+            }
+            Self::FailedToEnterProgramEntryPoint { name } => {
+                write!(
+                    f,
+                    "expected to be able to enter entry point of program with name `{name}` but this failed!"
+                )
+            }
+         }
     }
 }
 

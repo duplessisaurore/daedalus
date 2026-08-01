@@ -1,8 +1,9 @@
 //! This module holds all of the memory
 //! access related capabilities for all archs
 
-use daedalus_program::{RegionMemKind, RegionPermissions};
-use lepton3::lepton_vm::values::Tag;
+use daedalus_program::{Grant, GrantBase, GrantLen, RegionMemKind, RegionPermissions};
+use hashbrown::HashMap;
+use lepton3::lepton_vm::{tagger::TagGenerator, values::Tag};
 
 use crate::errors::DaedalusCapErrors;
 
@@ -13,6 +14,9 @@ unsafe extern "C" {
 
     /// The ending point of daedalus in memory.
     static __daedalus_end: u8;
+
+    /// The ending point of memory
+    static __dram_end: u8;
 }
 
 /// Generic abstraction layer trait
@@ -133,4 +137,85 @@ fn overlaps_daedalus(base: usize, len: usize) -> bool {
     let start = (&raw const __daedalus_start) as usize;
     let end = (&raw const __daedalus_end) as usize;
     base < end && start < base.saturating_add(len)
+}
+
+/// Resolves a manifest `Grant` into a `Region`
+///
+/// This can only be done at runtime as the concrete start/end
+/// of daedalus cannot be known.
+///
+/// This will ensure that either the `Region` does not `W` overlap, otherwise
+/// erroring if it does.
+pub fn resolve_grant(grant: &Grant) -> Result<Region, DaedalusCapErrors> {
+    let daedalus_start = (&raw const __daedalus_start) as usize;
+    let daedalus_end = (&raw const __daedalus_end) as usize;
+    let dram_end = (&raw const __dram_end) as usize;
+
+    // Get the start position of the grant.
+    let base = match grant.base {
+        GrantBase::Absolute(base) => base,
+        GrantBase::AfterDaedalus => daedalus_end,
+    };
+
+    // Get the length of the grant
+    let len =
+        match grant.len {
+            GrantLen::Bytes(len) => len,
+
+            // From `base` up to where Daedalus begins.
+            GrantLen::ToStartDaedalus => daedalus_start.checked_sub(base).ok_or(
+                DaedalusCapErrors::GrantBaseAboveDaedalus {
+                    role: grant.role,
+                    base,
+                },
+            )?,
+
+            // From `base` up to `__dram_end`
+            GrantLen::ToEndOfMemory => {
+                dram_end
+                    .checked_sub(base)
+                    .ok_or(DaedalusCapErrors::GrantBaseOutsideMemory {
+                        role: grant.role,
+                        base,
+                    })?
+            }
+        };
+
+    Region::new(base, len, grant.perms, grant.kind)
+}
+
+/// The return result of `mint_grants`, this is
+/// the set of new freshly minted regions from
+/// a set of grants.
+pub struct MintedGrantRegions {
+    pub regions: HashMap<RegionHandle, Region>,
+    pub named_grants: HashMap<&'static str, RegionHandle>,
+}
+
+/// Mints the region handles for a program's static grants.
+///
+/// This will set up all of the corresponding minted regions
+/// and their corresponding handles with a name map for a new
+/// program.
+pub fn mint_grants<T: TagGenerator>(
+    grants: &'static [Grant],
+    tagger: &mut T,
+) -> Result<MintedGrantRegions, DaedalusCapErrors> {
+    let mut regions = HashMap::new();
+    let mut named_grants = HashMap::new();
+
+    for grant in grants {
+        let region = resolve_grant(grant)?;
+
+        // Create a new handle for this grant's region and insert
+        // into our two maps.
+        let handle = RegionHandle(tagger.allocate_tag());
+        regions.insert(handle, region);
+        named_grants.insert(grant.role, handle);
+    }
+
+    Ok(MintedGrantRegions {
+        regions,
+        named_grants,
+    })
 }

@@ -159,9 +159,10 @@ fn advance_phase<H: HeapAllocator, T: TagGenerator>(
                 let program = InactiveProgram::from_image_with_name_and_arg(
                     next_phase.program.image,
                     name,
+                    next_phase.program.grants,
                     argument,
                     source_heap,
-                );
+                )?;
 
                 state.programs.insert(name, program);
                 state.ready_queue.push_back(name);
@@ -173,7 +174,7 @@ fn advance_phase<H: HeapAllocator, T: TagGenerator>(
             _ => {
                 virtual_machine
                     .capability_state
-                    .make_ready(name, next_phase.program.image);
+                    .make_ready(name, next_phase.program.image, next_phase.program.grants)?;
             }
         }
     }
