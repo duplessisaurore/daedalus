@@ -5,8 +5,9 @@
 use core::{error::Error, fmt::Display};
 
 use alloc::string::String;
+use daedalus_program::{InvalidRegionPermissionBitsError, RegionPermissions};
 
-use crate::{memory::RegionPermissions, program::CallTag};
+use crate::program::CallTag;
 
 #[derive(Debug)]
 pub enum DaedalusCapErrors {
@@ -74,7 +75,7 @@ pub enum DaedalusCapErrors {
 
     /// These permissison bits for memory regions were attempted to be
     /// set but they do not currently exist
-    InvalidRegionPermission(u64),
+    InvalidRegionPermission(InvalidRegionPermissionBitsError),
 
     /// This region overflowed the available memory space and cannot validly
     /// exist in the system
@@ -192,10 +193,11 @@ impl Display for DaedalusCapErrors {
                     "daedalus expected to find a reply target `{name:?}`, but there is no longer a running program by the time we are replying to it!"
                 )
             }
-            Self::InvalidRegionPermission(bits) => {
+            Self::InvalidRegionPermission(region_error) => {
                 write!(
                     f,
-                    "daedalus expected a valid set of permission bits in provided permission, however `{bits}` contained invalid permission bits!"
+                    "daedalus expected a valid set of permission bits in provided permission, however `{}` contained invalid permission bits!",
+                    region_error.0
                 )
             }
             Self::RegionOverflow { base, len } => {
@@ -245,3 +247,9 @@ impl Display for DaedalusCapErrors {
 }
 
 impl Error for DaedalusCapErrors {}
+
+impl From<InvalidRegionPermissionBitsError> for DaedalusCapErrors {
+    fn from(value: InvalidRegionPermissionBitsError) -> Self {
+        Self::InvalidRegionPermission(value)
+    }
+}
