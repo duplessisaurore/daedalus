@@ -37,23 +37,28 @@ pub trait StaticLeptonImage: LeptonImage<StaticSourceLocation, File = &'static s
 
 /// One Lepton3 daedalus program
 pub struct Program<Image: StaticLeptonImage + 'static> {
-    // The name of the program, this is defined in the
-    // "name" field of the manifest.toml
+    /// The name of the program, this is defined in the
+    /// "name" field of the manifest.toml
     pub name: &'static str,
 
-    // The actual image (lepton3) of this program
+    /// The actual image (lepton3) of this program
     pub image: &'static Image,
+
+    /// Grants to this program, these are static
+    /// memory regions this program should have
+    /// access to by default on creation
+    pub grants: &'static [Grant],
 }
 
 /// One Lepton3 daedalus phase
 pub struct Phase<Image: StaticLeptonImage + 'static> {
-    // The program this phase is running
+    /// The program this phase is running
     pub program: &'static Program<Image>,
 
-    // The name of the phase
+    /// The name of the phase
     pub name: &'static str,
 
-    // The name of the next phase to run on success.
+    /// The name of the next phase to run on success.
     pub next: &'static str,
 }
 

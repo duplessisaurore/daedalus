@@ -14,11 +14,15 @@ use serde::Deserialize;
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Manifest {
-    // The name defined for this program in the manifest
+    /// The name defined for this program in the manifest
     name: String,
 
-    // The source lepton3 image for this program
+    /// The source lepton3 image for this program
     image: String,
+
+    /// All of the grants (region definitions) for this program
+    #[serde(default)]
+    grants: Vec<GrantSpec>,
 }
 
 /// The parsed content of a Daedalus
@@ -27,11 +31,11 @@ struct Manifest {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Template {
-    // The set of all phases
+    /// The set of all phases
     #[serde(default)]
     pub phases: Vec<Phase>,
 
-    // The entry phase to the bootloader
+    /// The entry phase to the bootloader
     pub entry: String,
 }
 
@@ -42,14 +46,83 @@ struct Template {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Phase {
-    // The name of this phase for others to reference
+    /// The name of this phase for others to reference
     pub name: String,
 
-    // The next phase to run after all these programs have succeeded
+    /// The next phase to run after all these programs have succeeded
     pub next: String,
 
-    // The program to run during this phase, by name
+    /// The program to run during this phase, by name
     pub program: String,
+}
+
+// We redeclare these structs here because we don't want
+// to pull in serde at runtime
+
+/// One specification of a `Grant`
+/// in the manifest.
+///
+/// See `Grant`
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GrantSpec {
+    role: String,
+    base: GrantBaseSpec,
+    len: GrantLenSpec,
+    perms: RegionPermissionsSpec,
+    kind: RegionMemKindSpec,
+}
+
+/// See `GrantBase`
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum GrantBaseSpec {
+    Absolute(usize),
+    Keyword(GrantBaseKeyword),
+}
+
+/// Keyworded-GrantBase's
+#[derive(Debug, Deserialize, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+pub enum GrantBaseKeyword {
+    AfterDaedalus,
+}
+
+/// See `RegionMemKind`
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RegionMemKindSpec {
+    Memory,
+    Device,
+}
+
+/// See `RegionPermissions`
+#[derive(Debug, Deserialize)]
+pub enum RegionPermissionsSpec {
+    #[serde(rename = "")]
+    None,
+    #[serde(rename = "r")]
+    Read,
+    #[serde(rename = "w")]
+    Write,
+    #[serde(rename = "rw")]
+    ReadWrite,
+}
+
+/// See `GrantLen`
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum GrantLenSpec {
+    Bytes(usize),
+    Keyword(GrantLenKeyword),
+}
+
+/// Keyworded-GrantLen's
+#[derive(Debug, Deserialize, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+pub enum GrantLenKeyword {
+    ToStartDaedalus,
+    ToEndOfMemory,
 }
 
 /// Converts the name to it's Image struct name
@@ -384,14 +457,64 @@ fn main() {
         let program_name = to_program_const_name(&manifest.name);
         let struct_name = to_image_struct_name(&manifest.name);
 
+        // Build the grants table for this program from it's manifest.
+        let mut grants_table_literal = String::from("[");
+        for grant in &manifest.grants {
+            // Expression for the GrantBase
+            let base_expr = match grant.base {
+                GrantBaseSpec::Absolute(base) => format!("GrantBase::Absolute({base}usize)"),
+                GrantBaseSpec::Keyword(kwrd) => match kwrd {
+                    GrantBaseKeyword::AfterDaedalus => "GrantBase::AfterDaedalus".to_string(),
+                },
+            };
+
+            // Expression for the GrantLen
+            let len_expr = match grant.len {
+                GrantLenSpec::Bytes(len) => format!("GrantLen::Bytes({len}usize)"),
+                GrantLenSpec::Keyword(kwrd) => match kwrd {
+                    GrantLenKeyword::ToEndOfMemory => "GrantLen::ToEndOfDram".to_string(),
+                    GrantLenKeyword::ToStartDaedalus => "GrantLen::ToStartDaedalus".to_string(),
+                },
+            };
+
+            // RegionPermissions
+            let perms_expr = match grant.perms {
+                RegionPermissionsSpec::None => "RegionPermissions::NONE",
+                RegionPermissionsSpec::Read => "RegionPermissions::R",
+                RegionPermissionsSpec::Write => "RegionPermissions::W",
+                RegionPermissionsSpec::ReadWrite => "RegionPermissions::RW",
+            };
+
+            // RegionMemKind
+            let kind_expr = match grant.kind {
+                RegionMemKindSpec::Memory => "RegionMemKind::Memory",
+                RegionMemKindSpec::Device => "RegionMemKind::Device",
+            };
+
+            writeln!(
+                grants_table_literal,
+                "Grant {{ 
+                    role: {:?}, 
+                    base: {base_expr}, 
+                    len: {len_expr}, 
+                    perms: {perms_expr}, 
+                    kind: {kind_expr} 
+                }},",
+                grant.role,
+            )
+            .unwrap();
+        }
+        grants_table_literal.push(']');
+
         // Update the output with our included program
         writeln!(
             output,
             "static {program_name}: &'static Program<StaticDaedalusImageVariants> = &Program {{
         name: {:?},
         image: &StaticDaedalusImageVariants::{struct_name}(&{}),
+        grants: &{}
         }};",
-            manifest.name, image_literal
+            manifest.name, image_literal, grants_table_literal
         )
         .unwrap();
     }
