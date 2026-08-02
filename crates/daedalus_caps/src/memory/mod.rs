@@ -41,17 +41,17 @@ pub struct RegionHandle(pub Tag);
 #[derive(Clone, Copy, Debug)]
 pub struct Region {
     /// The start point of the memory region in bytes
-    base: usize,
+    pub base: usize,
 
     /// The size of the memory region in bytes
-    len: usize,
+    pub len: usize,
 
     /// The access permissions to grant to this program
     /// under this region
-    perms: RegionPermissions,
+    pub perms: RegionPermissions,
 
     /// The kind of memory belonging to this region
-    kind: RegionMemKind,
+    pub kind: RegionMemKind,
 }
 
 impl Region {
@@ -89,7 +89,10 @@ impl Region {
     /// Checks whether or not some access at some `offset` with
     /// some `width` and some `need` permissions `Perms` can be
     /// validly done within this `Region`
-    fn resolve(
+    ///
+    /// This does not check alignment of `width`, see `resolve`
+    /// for that.
+    fn resolve_without_checking_alignment(
         &self,
         offset: usize,
         width: usize,
@@ -117,6 +120,21 @@ impl Region {
             });
         }
 
+        Ok((self.base + offset) as *mut u8)
+    }
+
+    /// Checks whether or not some access at some `offset` with
+    /// some `width` and some `need` permissions `Perms` can be
+    /// validly done within this `Region`
+    ///
+    /// This also checks for alignment of the `width` based on the `offset`
+    /// and the `base` of the region.
+    fn resolve(
+        &self,
+        offset: usize,
+        width: usize,
+        need: RegionPermissions,
+    ) -> Result<*mut u8, DaedalusCapErrors> {
         // Ensure the address is aligned at this width we are
         // accessing at (grrr)
         if width != 0 && !(self.base + offset).is_multiple_of(width) {
@@ -126,8 +144,45 @@ impl Region {
             });
         }
 
-        Ok((self.base + offset) as *mut u8)
+        self.resolve_without_checking_alignment(offset, width, need)
     }
+
+    /// Creates a sub-region of this region with the requirements being:
+    ///     - Must be smaller than or equal to in size to this region's
+    ///     - Permissions must be less than or equal to this region's
+    /// 
+    /// All `kind`'s are inherited by the sub-region. (as its assumed a subset
+    /// of that kind remains the same kind.)
+    pub fn derive(
+        &self,
+        offset: usize,
+        len: usize,
+        perms: RegionPermissions,
+    ) -> Result<Region, DaedalusCapErrors> {
+        // Ensure the permissions are at least a subset
+        if !self.perms.contains(perms) {
+            return Err(DaedalusCapErrors::PermissionDenied {
+                need: perms,
+                held: self.perms,
+            });
+        }
+        
+        // Ensure the size is at least a subset.
+        let end = offset
+            .checked_add(len)
+            .ok_or(DaedalusCapErrors::AccessOverflow { offset, width: len })?;
+ 
+        if end > self.len {
+            return Err(DaedalusCapErrors::OutOfRegion {
+                offset,
+                width: len,
+                len: self.len,
+            });
+        }
+        
+        Region::new(self.base + offset, len, perms, self.kind)
+    }
+
 }
 
 /// Checks whether or not the provided region starting
