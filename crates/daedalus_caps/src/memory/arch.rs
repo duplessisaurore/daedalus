@@ -28,7 +28,20 @@ pub trait MemoryArch {
     /// This is for archs which need to flush the written data from the bootloader
     /// before it can be executed as instructions. (say flush from d-cache so i-cache
     /// can read it and execute it)
-    fn flush_range(pointer: *mut u8, len: usize);
+    unsafe fn flush_range(pointer: *mut u8, len: usize);
+
+    /// Setup this specific architecture.
+    /// 
+    /// Some architectures may require arch specific setup/teardown of previous
+    /// stage things before `Daedalus` can start.
+    unsafe fn setup();
+
+    /// Teardown this specific architecture.
+    /// 
+    /// This should generally do the inverse of any setup that was required,
+    /// such that we tore down anything `Daedalus` setup so that we can hand off
+    /// to the OS/kernel plainly.
+    unsafe fn teardown();
 }
 
 /// Different possible access widths for a certain
@@ -55,7 +68,7 @@ impl AccessWidth {
 
     /// Return the corresponding `AccessWidth`
     /// for some `usize` access width (must be 1, 2, 4, 8)
-    pub fn from_bytes(self, bytes: usize) -> Result<Self, DaedalusCapErrors> {
+    pub fn from_bytes(bytes: usize) -> Result<Self, DaedalusCapErrors> {
         Ok(match bytes {
             1 => Self::U8,
             2 => Self::U16,
@@ -63,5 +76,16 @@ impl AccessWidth {
             8 => Self::U64,
             _ => Err(DaedalusCapErrors::InvalidAccessWidth { width: bytes })?,
         })
+    }
+
+    /// Returns the maximum value storable in a U64 with
+    /// this access width.
+    pub const fn max_value(self) -> u64 {
+        match self {
+            Self::U8 => u8::MAX as u64,
+            Self::U16 => u16::MAX as u64,
+            Self::U32 => u32::MAX as u64,
+            Self::U64 => u64::MAX,
+        }
     }
 }
