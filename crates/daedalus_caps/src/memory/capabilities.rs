@@ -217,3 +217,45 @@ pub fn cap_mem_derive<H: HeapAllocator, T: TagGenerator>(
     virtual_machine.stack.push(Value::Tag(handle.0));
     Ok(())
 }
+
+/// = `mem_release`
+///
+/// Drops one of the current program's own regions referred
+/// to by a region handle.
+///
+///     [<top> `region`]
+///
+/// This will obliterate the region from existence, not any
+/// sub-region of it but the current region.
+///
+/// Any other handles to this region will cease to function.
+/// 
+/// This does not free a `grant` region. The region handle
+/// will just be obliterated transparently.
+///
+/// !!! BE CAREFUL !!!
+pub fn cap_mem_release<H: HeapAllocator, T: TagGenerator>(
+    virtual_machine: &mut DaedalusVm<H, T>,
+) -> Result<(), Box<dyn Error>> {
+    let handle = pop_region_handle(virtual_machine)?;
+    let state = &mut virtual_machine.capability_state;
+
+    // Find if it's a grant, 
+    let role = state
+        .named_grants
+        .iter()
+        .find(|(_, granted)| **granted == handle)
+        .map(|(role, _)| *role);
+
+    // Grants are not removed, but the process occurs transparently
+    if role.is_some() {
+        return Ok(())
+    }
+    
+    // Grrr goodbye region
+    if state.regions.remove(&handle).is_none() {
+        return Err(DaedalusCapErrors::UnknownRegionHandle(handle).into());
+    }
+
+    Ok(())
+}
