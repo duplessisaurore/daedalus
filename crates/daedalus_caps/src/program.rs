@@ -178,7 +178,6 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
     /// to find this program again.
     ///
     /// This `Program` has no arguments in it's entry point function.
-    #[must_use]
     pub fn from_image_with_name(
         image: &'static I,
         name: &'static str,
@@ -211,7 +210,6 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
     /// This does not guarantee the argument is passed to the new
     /// program if the new program's entry point does not take any
     /// arguments.
-    #[must_use]
     pub fn from_image_with_name_and_arg(
         image: &'static I,
         name: &'static str,
@@ -268,7 +266,6 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
     /// This takes in an `initial_machine_state` VirtualMachine and packages
     /// all of its current state alongside the `image` and it's `name`
     /// into an `InactiveMachine`
-    #[must_use]
     fn from_initial_machine(
         image: &'static I,
         name: &'static str,

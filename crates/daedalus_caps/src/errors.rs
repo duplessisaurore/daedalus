@@ -7,7 +7,7 @@ use core::{error::Error, fmt::Display};
 use alloc::string::String;
 use daedalus_program::{InvalidRegionPermissionBitsError, RegionPermissions};
 
-use crate::program::CallTag;
+use crate::{memory::RegionHandle, program::CallTag};
 
 #[derive(Debug)]
 pub enum DaedalusCapErrors {
@@ -138,6 +138,51 @@ pub enum DaedalusCapErrors {
     /// A grant call looked up a role that does not exist in
     /// the manifest/grants of the current program
     CouldNotFindGrantRole { looked_up_role: String },
+
+    /// Expected a region handle on the stack, but
+    /// no region handle could be found!
+    StackUnderflowExpectedRegionHandle,
+
+    /// A region handle was expected, but some other value type was
+    /// found on the stack instead.
+    RegionHandleExpected { found_type: &'static str },
+
+    /// Expected a permissions value here but nothing was found
+    StackUnderflowExpectedRegionPermissions,
+
+    /// Expected a permissions value here, but instead
+    /// found an unexpected type!
+    RegionPermissionsExpected { found_type: &'static str },
+
+    /// Expected an access/derive length at this position
+    /// but nothing was found!
+    StackUnderflowExpectedRegionAccessDeriveLength,
+
+    /// Expected a access/derive value here, but instead
+    /// found an unexpected type!
+    RegionAccessDeriveLengthExpected { found_type: &'static str },
+
+    /// The length provided is too large to fit into
+    /// a word size on the platform! this cannot be possibly
+    /// a region length!
+    LengthTooLarge { illegal_length: u64 },
+
+    /// Expected an access/derive offset at this position
+    /// but nothing was found!
+    StackUnderflowExpectedRegionAccessDeriveOffset,
+
+    /// Expected a access/derive value here, but instead
+    /// found an unexpected type!
+    RegionAccessDeriveOffsetExpected { found_type: &'static str },
+
+    /// The offset provided is too large to fit into
+    /// a word size on the platform! this cannot be possibly
+    /// a region offset!
+    OffsetTooLarge { illegal_offset: u64 },
+
+    /// A valid region handle was expected here, but this tag passed
+    /// was unknown to be a valid region handle for the current program.
+    UnknownRegionHandle(RegionHandle),
 }
 
 impl Display for DaedalusCapErrors {
@@ -210,7 +255,7 @@ impl Display for DaedalusCapErrors {
             Self::UnknownReplyTag(tag) => {
                 write!(
                     f,
-                    "daedalus attempted to call non_block_reply with tag `{tag:?}`, but this tag has no outstanding request to reply with, did it really get allocated by `block_recv`?"
+                    "daedalus found attempt to call non_block_reply with tag `{tag:?}`, but this tag has no outstanding request to reply with, did it really get allocated by `block_recv`?"
                 )
             }
             Self::CallerGone(name) => {
@@ -302,6 +347,72 @@ impl Display for DaedalusCapErrors {
                 write!(
                     f,
                     "daedalus capability tried to look up grant with role `{looked_up_role}`, but could not find any grants with that role!"
+                )
+            }
+            Self::StackUnderflowExpectedRegionHandle => {
+                write!(
+                    f,
+                    "daedalus expected to find a memory region handle on the stack but nothing was found!"
+                )
+            }
+            Self::RegionHandleExpected { found_type } => {
+                write!(
+                    f,
+                    "daedalus expected a memory region handle, but instead found a `{found_type}`!"
+                )
+            }
+            Self::StackUnderflowExpectedRegionPermissions => {
+                write!(
+                    f,
+                    "daedalus expected to find memory region permissions on the stack but nothing was found!"
+                )
+            }
+            Self::RegionPermissionsExpected { found_type } => {
+                write!(
+                    f,
+                    "daedalus expected memory region permissions, but instead found a `{found_type}`!"
+                )
+            }
+            Self::StackUnderflowExpectedRegionAccessDeriveLength => {
+                write!(
+                    f,
+                    "daedalus expected to find memory length for region access/derive size on the stack but nothing was found!"
+                )
+            }
+            Self::RegionAccessDeriveLengthExpected { found_type } => {
+                write!(
+                    f,
+                    "daedalus expected memory length for region access/derive size, but instead found a `{found_type}`!"
+                )
+            }
+            Self::LengthTooLarge { illegal_length } => {
+                write!(
+                    f,
+                    "daedalus expected memory length for region access/derive size to be within the bounds of `usize`, however it was not! instead got illegal length of `{illegal_length}`!"
+                )
+            }
+            Self::StackUnderflowExpectedRegionAccessDeriveOffset => {
+                write!(
+                    f,
+                    "daedalus expected to find memory offset from base for region access/derive on the stack but nothing was found!"
+                )
+            }
+            Self::RegionAccessDeriveOffsetExpected { found_type } => {
+                write!(
+                    f,
+                    "daedalus expected memory offset from base for region access/derive, but instead found a `{found_type}`!"
+                )
+            }
+            Self::OffsetTooLarge { illegal_offset } => {
+                write!(
+                    f,
+                    "daedalus expected memory offset from base for region access/derive to be within the bounds of `usize`, however it was not! instead got illegal offset of `{illegal_offset}`!"
+                )
+            }
+            Self::UnknownRegionHandle(handle) => {
+                write!(
+                    f,
+                    "daedalus found attempt to invoke region operation with tag `{handle:?}`, but this tag is not a handle to a region, does it really refer to a valid memory region?"
                 )
             }
         }
