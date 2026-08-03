@@ -26,6 +26,15 @@ unsafe extern "C" {
 /// all the `Daedalus` memory ops.
 pub mod arch;
 
+/// The architecture this build targets for memory operations.
+/// 
+/// Generally one is required for compilation
+#[cfg(target_arch = "aarch64")]
+pub type Arch = aarch64::Aarch64;
+
+#[cfg(target_arch = "aarch64")]
+pub mod aarch64;
+
 /// A unique memory region's tag handle which is
 /// associated with some region
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone, Copy)]

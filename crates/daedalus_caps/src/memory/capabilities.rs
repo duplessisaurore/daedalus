@@ -14,9 +14,7 @@ use lepton3::lepton_vm::{
 };
 
 use crate::{
-    errors::DaedalusCapErrors,
-    ipc::capabilities::DaedalusVm,
-    memory::{Region, RegionHandle, arch::AccessWidth},
+    errors::DaedalusCapErrors, ipc::capabilities::DaedalusVm, memory::{Arch, Region, RegionHandle, arch::{AccessWidth, MemoryArch}},
 };
 
 /// Pops a region handle without resolving it.
@@ -425,7 +423,7 @@ pub fn cap_mem_write<H: HeapAllocator, T: TagGenerator>(
     // This write is already validated in terms of alignment and permissions
     // within the region system by the above `resolve`. 
     unsafe { 
-        Arch::write(pointer, width, value) 
+        Arch::write(pointer, width, uint_write_out_value) 
     };
 
     Ok(())
