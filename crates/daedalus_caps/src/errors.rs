@@ -205,10 +205,7 @@ pub enum DaedalusCapErrors {
 
     /// The value is too wide for access with the width
     /// provided !
-    ValueTooWideForAccess {
-        value: u64,
-        width: usize
-    }
+    ValueTooWideForAccess { value: u64, width: usize },
 }
 
 impl Display for DaedalusCapErrors {
@@ -453,7 +450,9 @@ impl Display for DaedalusCapErrors {
                     "daedalus expected memory access width from base for region access/derive, but instead found a `{found_type}`!"
                 )
             }
-            Self::AccessWidthTooLarge { illegal_access_width } => {
+            Self::AccessWidthTooLarge {
+                illegal_access_width,
+            } => {
                 write!(
                     f,
                     "daedalus expected memory access width from base for region access/derive, found one but it was way too large for the system! illegal access width is `{illegal_access_width}`!"

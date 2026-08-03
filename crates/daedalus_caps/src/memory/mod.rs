@@ -27,7 +27,7 @@ unsafe extern "C" {
 pub mod arch;
 
 /// The architecture this build targets for memory operations.
-/// 
+///
 /// Generally one is required for compilation
 #[cfg(target_arch = "aarch64")]
 pub type Arch = aarch64::Aarch64;

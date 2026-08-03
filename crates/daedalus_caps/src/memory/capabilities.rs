@@ -14,7 +14,12 @@ use lepton3::lepton_vm::{
 };
 
 use crate::{
-    errors::DaedalusCapErrors, ipc::capabilities::DaedalusVm, memory::{Arch, Region, RegionHandle, arch::{AccessWidth, MemoryArch}},
+    errors::DaedalusCapErrors,
+    ipc::capabilities::DaedalusVm,
+    memory::{
+        Arch, Region, RegionHandle,
+        arch::{AccessWidth, MemoryArch},
+    },
 };
 
 /// Pops a region handle without resolving it.
@@ -360,23 +365,21 @@ pub fn cap_mem_read<H: HeapAllocator, T: TagGenerator>(
     // SAFETY:
     //
     // This read is already validated in terms of alignment and permissions
-    // within the region system by the above `resolve`. 
-    let value = unsafe { 
-        Arch::read(pointer, width) 
-    };
+    // within the region system by the above `resolve`.
+    let value = unsafe { Arch::read(pointer, width) };
 
     virtual_machine.stack.push(Value::UInt(value));
     Ok(())
 }
 
 /// = `mem_write`
-/// 
+///
 /// Writes an aligned value at some `offset` in a `region`
 /// with some `width`.
 ///
 /// The stack should be as follows:
 ///
-///      [<top> `value`, `width`, `offset`, `region`] 
+///      [<top> `value`, `width`, `offset`, `region`]
 ///
 /// On a successful write, the produced value will be nothing
 /// on the stack, and all values will be consumed.
@@ -385,7 +388,7 @@ pub fn cap_mem_read<H: HeapAllocator, T: TagGenerator>(
 /// at least carry the `W` permission.
 ///
 /// The value written should be a `UInt`, and must fit in `width` bytes.
-/// 
+///
 /// Please check if a `mem_flush` is required following this write :D
 pub fn cap_mem_write<H: HeapAllocator, T: TagGenerator>(
     virtual_machine: &mut DaedalusVm<H, T>,
@@ -421,11 +424,8 @@ pub fn cap_mem_write<H: HeapAllocator, T: TagGenerator>(
     // SAFETY:
     //
     // This write is already validated in terms of alignment and permissions
-    // within the region system by the above `resolve`. 
-    unsafe { 
-        Arch::write(pointer, width, uint_write_out_value) 
-    };
+    // within the region system by the above `resolve`.
+    unsafe { Arch::write(pointer, width, uint_write_out_value) };
 
     Ok(())
 }
-

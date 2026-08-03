@@ -12,9 +12,27 @@ use crate::errors::DaedalusCapErrors;
 /// than this.
 pub trait MemoryArch {
     /// Read some `width` bytes at the address supplied by `pointer`
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that the current execution state (program)
+    /// has actual access to the data specified by `pointer` with `width`.
+    ///
+    /// This access must be with `Read` permissions (`R`).
+    ///
+    /// The `width` and `pointer` must also be correctly aligned.
     unsafe fn read(pointer: *const u8, width: AccessWidth) -> u64;
 
     /// Write some `width` bytes specified by `value` to the address specified by `pointer`
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that the current execution state (program)
+    /// has actual access to the data specified by `pointer` with `width`.
+    ///
+    /// This access must be with `Write` permissions (`W`).
+    ///
+    /// The `width` and `pointer` must also be correctly aligned.
     unsafe fn write(pointer: *mut u8, width: AccessWidth, value: u64);
 
     /// Copy some `len` bytes over from address at `source` to the address at `destination`
