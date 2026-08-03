@@ -429,3 +429,29 @@ pub fn cap_mem_write<H: HeapAllocator, T: TagGenerator>(
 
     Ok(())
 }
+
+/// = `is_region_handle`
+///
+/// This capability consumes the tag at the top of the stack as follows:
+///
+///     [<top> `region`]
+///
+/// If this tag refers to a `Region` as a `RegionHandle` then this will push 
+/// `true`, otherwise, false.
+///
+/// The output will be as follows:
+///
+///     [<top> <is_region_handle>]
+///
+pub fn cap_is_region_handle<H: HeapAllocator, T: TagGenerator>(
+    virtual_machine: &mut DaedalusVm<H, T>,
+) -> Result<(), Box<dyn Error>> {
+    let handle = pop_region_handle(virtual_machine)?;
+    let held = virtual_machine
+        .capability_state
+        .regions
+        .contains_key(&handle);
+
+    virtual_machine.stack.push(Value::Bool(held));
+    Ok(())
+}
