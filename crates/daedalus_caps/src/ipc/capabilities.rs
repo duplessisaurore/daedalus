@@ -602,7 +602,7 @@ pub fn cap_non_block_reply<H: HeapAllocator, T: TagGenerator>(
 
 /// = `is_replyable_tag`
 ///
-/// This capability inspects the tag at the top of the stack as follows:
+/// This capability consumes the tag at the top of the stack as follows:
 ///
 ///     [<top> `call_tag`]
 ///
@@ -611,6 +611,10 @@ pub fn cap_non_block_reply<H: HeapAllocator, T: TagGenerator>(
 /// pushes a `true` onto the stack.
 ///
 /// Otherwise, false.
+/// 
+/// The output will be as follows:
+/// 
+///     [<top> <is_replyable_tag>]
 ///
 /// This does not meet all possible forms of a `call_tag`, and does not attempt
 /// to. For example a tag produced by `non_block_call` will not be passable here
@@ -620,7 +624,7 @@ pub fn cap_is_replyable_tag<H: HeapAllocator, T: TagGenerator>(
 ) -> Result<(), Box<dyn Error>> {
     let tag_value = virtual_machine
         .stack
-        .first()
+        .pop()
         .ok_or(DaedalusCapErrors::StackUnderflowExpectedCallTag)?;
 
     // Make sure it's a tag and in the current pending replies
@@ -628,12 +632,62 @@ pub fn cap_is_replyable_tag<H: HeapAllocator, T: TagGenerator>(
         let is_reply_tag = virtual_machine
             .capability_state
             .pending_replies
-            .contains_key(&CallTag(*tag));
+            .contains_key(&CallTag(tag));
 
         virtual_machine.stack.push(Value::Bool(is_reply_tag));
         return Ok(());
     };
 
     virtual_machine.stack.push(Value::Bool(false));
+    Ok(())
+}
+
+/// = `caller_of`
+///
+/// This capability consumes the top of the stack as follows:
+/// 
+///     [<top> `call_tag`]
+///
+/// Returns the name of the program that sent the request this
+/// `call_tag` replies to, as a `Boson3` string.
+///
+/// This tag must be from a `request` and replyable to in a way
+/// that `is_replyable_tag` would return `true`.
+pub fn cap_caller_of<H: HeapAllocator, T: TagGenerator>(
+    virtual_machine: &mut DaedalusVm<H, T>,
+) -> Result<(), Box<dyn Error>> {
+    let tag_value = virtual_machine
+        .stack
+        .pop()
+        .ok_or(DaedalusCapErrors::StackUnderflowExpectedCallTag)?;
+
+    let Value::Tag(tag) = tag_value else {
+        return Err(DaedalusCapErrors::ReplyTagExpected {
+            found_type: value_type_name(&tag_value),
+        }
+        .into());
+    };
+
+    // Must be a reply tag, we assume this invariant.
+    let callee_tag = CallTag(tag);
+
+    let caller = virtual_machine
+        .capability_state
+        .pending_replies
+        .get(&callee_tag)
+        .ok_or(DaedalusCapErrors::UnknownReplyTag(callee_tag))?
+        .caller_program;
+
+    // Allocate the name as an array of UInt bytes in this program's
+    // heap, and push it onto the stack
+    //
+    // We need to gc_collect before that to ensure the invariants are still met.
+    // this is fine since we don't pop anything on the heap above (that we allow through)
+    virtual_machine.gc_collect();
+
+    let bytes: Vec<Value> = caller.bytes().map(|b| Value::UInt(u64::from(b))).collect();
+    let index = virtual_machine.heap.alloc_raw(HeapItem::Array(bytes));
+
+    virtual_machine.stack.push(Value::Array(index));
     Ok(())
 }
