@@ -150,7 +150,7 @@ impl Region {
     /// Creates a sub-region of this region with the requirements being:
     ///     - Must be smaller than or equal to in size to this region's
     ///     - Permissions must be less than or equal to this region's
-    /// 
+    ///
     /// All `kind`'s are inherited by the sub-region. (as its assumed a subset
     /// of that kind remains the same kind.)
     pub fn derive(
@@ -166,12 +166,12 @@ impl Region {
                 held: self.perms,
             });
         }
-        
+
         // Ensure the size is at least a subset.
         let end = offset
             .checked_add(len)
             .ok_or(DaedalusCapErrors::AccessOverflow { offset, width: len })?;
- 
+
         if end > self.len {
             return Err(DaedalusCapErrors::OutOfRegion {
                 offset,
@@ -179,10 +179,9 @@ impl Region {
                 len: self.len,
             });
         }
-        
+
         Region::new(self.base + offset, len, perms, self.kind)
     }
-
 }
 
 /// Checks whether or not the provided region starting

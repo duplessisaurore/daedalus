@@ -172,9 +172,11 @@ fn advance_phase<H: HeapAllocator, T: TagGenerator>(
             // and mark it as ready, or if already exists push the "notificaiton"-`Message`
             // and make it ready.
             _ => {
-                virtual_machine
-                    .capability_state
-                    .make_ready(name, next_phase.program.image, next_phase.program.grants)?;
+                virtual_machine.capability_state.make_ready(
+                    name,
+                    next_phase.program.image,
+                    next_phase.program.grants,
+                )?;
             }
         }
     }
@@ -595,5 +597,43 @@ pub fn cap_non_block_reply<H: HeapAllocator, T: TagGenerator>(
         }
     }
 
+    Ok(())
+}
+
+/// = `is_replyable_tag`
+///
+/// This capability inspects the tag at the top of the stack as follows:
+///
+///     [<top> `call_tag`]
+///
+/// If this tag can be replyed to with `non_block_reply`, essentially such
+/// that it is in the `pending_replies` of this program, then this capability
+/// pushes a `true` onto the stack.
+///
+/// Otherwise, false.
+///
+/// This does not meet all possible forms of a `call_tag`, and does not attempt
+/// to. For example a tag produced by `non_block_call` will not be passable here
+/// as its not "replyable" to but rather the result of a reply back to that program.
+pub fn cap_is_replyable_tag<H: HeapAllocator, T: TagGenerator>(
+    virtual_machine: &mut DaedalusVm<H, T>,
+) -> Result<(), Box<dyn Error>> {
+    let tag_value = virtual_machine
+        .stack
+        .first()
+        .ok_or(DaedalusCapErrors::StackUnderflowExpectedCallTag)?;
+
+    // Make sure it's a tag and in the current pending replies
+    if let Value::Tag(tag) = tag_value {
+        let is_reply_tag = virtual_machine
+            .capability_state
+            .pending_replies
+            .contains_key(&CallTag(*tag));
+
+        virtual_machine.stack.push(Value::Bool(is_reply_tag));
+        return Ok(());
+    };
+
+    virtual_machine.stack.push(Value::Bool(false));
     Ok(())
 }

@@ -31,13 +31,13 @@ pub trait MemoryArch {
     unsafe fn flush_range(pointer: *mut u8, len: usize);
 
     /// Setup this specific architecture.
-    /// 
+    ///
     /// Some architectures may require arch specific setup/teardown of previous
     /// stage things before `Daedalus` can start.
     unsafe fn setup();
 
     /// Teardown this specific architecture.
-    /// 
+    ///
     /// This should generally do the inverse of any setup that was required,
     /// such that we tore down anything `Daedalus` setup so that we can hand off
     /// to the OS/kernel plainly.
