@@ -16,7 +16,7 @@ use lepton3::lepton_vm::{
 use crate::{
     errors::DaedalusCapErrors,
     ipc::capabilities::DaedalusVm,
-    memory::{Region, RegionHandle},
+    memory::{Region, RegionHandle, arch::AccessWidth},
 };
 
 /// Pops a region handle without resolving it.
@@ -101,6 +101,31 @@ fn pop_region_offset<H: HeapAllocator, T: TagGenerator>(
             )
         }
         other => Err(DaedalusCapErrors::RegionAccessDeriveOffsetExpected {
+            found_type: value_type_name(&other),
+        }),
+    }
+}
+
+/// Pops an access/derive "access width" for a region.
+///
+/// Errors if none could be found, ensures its within "AccessWidth"
+fn pop_access_width<H: HeapAllocator, T: TagGenerator>(
+    virtual_machine: &mut DaedalusVm<H, T>,
+) -> Result<AccessWidth, DaedalusCapErrors> {
+    let value = virtual_machine
+        .stack
+        .pop()
+        .ok_or(DaedalusCapErrors::StackUnderflowExpectedAccessWidth)?;
+
+    match value {
+        Value::UInt(access_width_bytes) => Ok(AccessWidth::from_bytes(
+            usize::try_from(access_width_bytes).map_err(|_| {
+                DaedalusCapErrors::AccessWidthTooLarge {
+                    illegal_access_width: access_width_bytes,
+                }
+            })?,
+        )?),
+        other => Err(DaedalusCapErrors::AccessWidthExpected {
             found_type: value_type_name(&other),
         }),
     }
@@ -229,7 +254,7 @@ pub fn cap_mem_derive<H: HeapAllocator, T: TagGenerator>(
 /// sub-region of it but the current region.
 ///
 /// Any other handles to this region will cease to function.
-/// 
+///
 /// This does not free a `grant` region. The region handle
 /// will just be obliterated transparently.
 ///
@@ -240,7 +265,7 @@ pub fn cap_mem_release<H: HeapAllocator, T: TagGenerator>(
     let handle = pop_region_handle(virtual_machine)?;
     let state = &mut virtual_machine.capability_state;
 
-    // Find if it's a grant, 
+    // Find if it's a grant,
     let role = state
         .named_grants
         .iter()
@@ -249,9 +274,9 @@ pub fn cap_mem_release<H: HeapAllocator, T: TagGenerator>(
 
     // Grants are not removed, but the process occurs transparently
     if role.is_some() {
-        return Ok(())
+        return Ok(());
     }
-    
+
     // Grrr goodbye region
     if state.regions.remove(&handle).is_none() {
         return Err(DaedalusCapErrors::UnknownRegionHandle(handle).into());
@@ -259,3 +284,150 @@ pub fn cap_mem_release<H: HeapAllocator, T: TagGenerator>(
 
     Ok(())
 }
+
+/// = `mem_base`
+///
+/// This looks at the region referred to by a region handle:
+///
+///     [<top> `region`]
+///
+/// And pops the handle and pushes the base of the region onto
+/// the stack as follows:
+///
+///     [<top> `base`]
+///
+/// This is a `UInt` value.
+pub fn cap_mem_base<H: HeapAllocator, T: TagGenerator>(
+    virtual_machine: &mut DaedalusVm<H, T>,
+) -> Result<(), Box<dyn Error>> {
+    let region = pop_region(virtual_machine)?;
+    virtual_machine.stack.push(Value::UInt(region.base as u64));
+    Ok(())
+}
+
+/// = `mem_base`
+///
+/// This looks at the region referred to by a region handle:
+///
+///     [<top> `region`]
+///
+/// And pops the handle and pushes the length of the region onto
+/// the stack as follows:
+///
+///     [<top> `length`]
+///
+/// This is a `UInt` value.
+pub fn cap_mem_len<H: HeapAllocator, T: TagGenerator>(
+    virtual_machine: &mut DaedalusVm<H, T>,
+) -> Result<(), Box<dyn Error>> {
+    let region = pop_region(virtual_machine)?;
+    virtual_machine.stack.push(Value::UInt(region.len as u64));
+    Ok(())
+}
+
+/// = `mem_read`
+///
+/// Reads an aligned value outside of some `offset` in a `region`
+/// with some `width`.
+///
+/// The stack should be as follows:
+///
+///     [<top> `width`, `offset`, `region`]
+///
+/// On a successful read, the produced value will be like this
+/// on the stack:
+///
+///     [<top> `value`]
+///
+/// `width` must be either `1`, `2`, `4`, `8` and the region must
+/// at least carry the `R` permission.
+///
+/// The value produced is pushed as a `UInt`.
+///
+/// The read is a single volatile access.
+///
+/// For programs sharing a writeable region, they should `mem_flush` as
+/// there's no synchronisation that is enforced by this cap.
+pub fn cap_mem_read<H: HeapAllocator, T: TagGenerator>(
+    virtual_machine: &mut DaedalusVm<H, T>,
+) -> Result<(), Box<dyn Error>> {
+    let width = pop_access_width(virtual_machine)?;
+    let offset = pop_region_offset(virtual_machine)?;
+    let region = pop_region(virtual_machine)?;
+
+    // This ensures the permissions are met, the offset is aligned
+    // with the width and everything is met !
+    let pointer = region.resolve(offset, width.bytes(), RegionPermissions::R)?;
+
+    // SAFETY:
+    //
+    // This read is already validated in terms of alignment and permissions
+    // within the region system by the above `resolve`. 
+    let value = unsafe { 
+        Arch::read(pointer, width) 
+    };
+
+    virtual_machine.stack.push(Value::UInt(value));
+    Ok(())
+}
+
+/// = `mem_write`
+/// 
+/// Writes an aligned value at some `offset` in a `region`
+/// with some `width`.
+///
+/// The stack should be as follows:
+///
+///      [<top> `value`, `width`, `offset`, `region`] 
+///
+/// On a successful write, the produced value will be nothing
+/// on the stack, and all values will be consumed.
+///
+/// `width` must be either `1`, `2`, `4`, `8` and the region must
+/// at least carry the `W` permission.
+///
+/// The value written should be a `UInt`, and must fit in `width` bytes.
+/// 
+/// Please check if a `mem_flush` is required following this write :D
+pub fn cap_mem_write<H: HeapAllocator, T: TagGenerator>(
+    virtual_machine: &mut DaedalusVm<H, T>,
+) -> Result<(), Box<dyn Error>> {
+    // Grab the UInt value we are writing out
+    let value = virtual_machine
+        .stack
+        .pop()
+        .ok_or(DaedalusCapErrors::StackUnderflowExpectedWriteValue)?;
+
+    let Value::UInt(uint_write_out_value) = value else {
+        return Err(DaedalusCapErrors::WriteValueExpected {
+            found_type: value_type_name(&value),
+        })?;
+    };
+
+    let width = pop_access_width(virtual_machine)?;
+    let offset = pop_region_offset(virtual_machine)?;
+    let region = pop_region(virtual_machine)?;
+
+    // Reject the value if its greater than the max value of the width.
+    if uint_write_out_value > width.max_value() {
+        return Err(DaedalusCapErrors::ValueTooWideForAccess {
+            value: uint_write_out_value,
+            width: width.bytes(),
+        }
+        .into());
+    }
+
+    // Validate the permissions/access for this offset in the region.
+    let pointer = region.resolve(offset, width.bytes(), RegionPermissions::W)?;
+
+    // SAFETY:
+    //
+    // This write is already validated in terms of alignment and permissions
+    // within the region system by the above `resolve`. 
+    unsafe { 
+        Arch::write(pointer, width, value) 
+    };
+
+    Ok(())
+}
+

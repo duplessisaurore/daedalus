@@ -183,6 +183,32 @@ pub enum DaedalusCapErrors {
     /// A valid region handle was expected here, but this tag passed
     /// was unknown to be a valid region handle for the current program.
     UnknownRegionHandle(RegionHandle),
+
+    /// Expected an access/derive access width for a region
+    StackUnderflowExpectedAccessWidth,
+
+    /// Expected a access/derive access width for a region
+    /// but it was not found
+    AccessWidthExpected { found_type: &'static str },
+
+    /// The access width provided is too large! It doesn't
+    /// fit awaa
+    AccessWidthTooLarge { illegal_access_width: u64 },
+
+    /// Expected a value to write out for the `mem_write`
+    /// call, but there was no value to actually write!
+    StackUnderflowExpectedWriteValue,
+
+    /// Expected a value to write out for the `mem_write`
+    /// call which is `UInt` but an unexpected value was provided!
+    WriteValueExpected { found_type: &'static str },
+
+    /// The value is too wide for access with the width
+    /// provided !
+    ValueTooWideForAccess {
+        value: u64,
+        width: usize
+    }
 }
 
 impl Display for DaedalusCapErrors {
@@ -413,6 +439,42 @@ impl Display for DaedalusCapErrors {
                 write!(
                     f,
                     "daedalus found attempt to invoke region operation with tag `{handle:?}`, but this tag is not a handle to a region, does it really refer to a valid memory region?"
+                )
+            }
+            Self::StackUnderflowExpectedAccessWidth => {
+                write!(
+                    f,
+                    "daedalus expected to find memory access width for region access/derive on the stack but nothing was found!"
+                )
+            }
+            Self::AccessWidthExpected { found_type } => {
+                write!(
+                    f,
+                    "daedalus expected memory access width from base for region access/derive, but instead found a `{found_type}`!"
+                )
+            }
+            Self::AccessWidthTooLarge { illegal_access_width } => {
+                write!(
+                    f,
+                    "daedalus expected memory access width from base for region access/derive, found one but it was way too large for the system! illegal access width is `{illegal_access_width}`!"
+                )
+            }
+            Self::StackUnderflowExpectedWriteValue => {
+                write!(
+                    f,
+                    "daedalus expected to find a value to mem write on the stack but nothing was found!"
+                )
+            }
+            Self::WriteValueExpected { found_type } => {
+                write!(
+                    f,
+                    "daedalus expected a value to mem write, but instead found a `{found_type}`!"
+                )
+            }
+            Self::ValueTooWideForAccess { value, width } => {
+                write!(
+                    f,
+                    "daedalus expected a value to mem write that fit in width `{width}`, but instead got a value that doesnt fit! the value was `{value}`."
                 )
             }
         }
