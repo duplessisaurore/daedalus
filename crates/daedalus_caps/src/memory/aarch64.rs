@@ -39,12 +39,43 @@ impl MemoryArch for Aarch64 {
         }
     }
 
-    unsafe fn copy(_source: *const u8, _destination: *mut u8, _len: usize) {
-        todo!()
+    unsafe fn copy(source: *const u8, destination: *mut u8, len: usize) {
+        // Backwards-case, see comment of `copy`
+        if (destination as usize) > (source as usize)
+            && (destination as usize) < (source as usize) + len
+        {
+            let mut i = len;
+            while i > 0 {
+                i -= 1;
+                unsafe {
+                    destination
+                        .add(i)
+                        .write_volatile(source.add(i).read_volatile())
+                };
+            }
+
+            return;
+        }
+
+        // Forward-case, see comment of `copy`
+        let mut i = 0usize;
+        while i < len {
+            unsafe {
+                destination
+                    .add(i)
+                    .write_volatile(source.add(i).read_volatile())
+            };
+            i += 1;
+        }
     }
 
-    unsafe fn fill(_destination: *mut u8, _value: u8, _len: usize) {
-        todo!()
+    unsafe fn fill(destination: *mut u8, value: u8, len: usize) {
+        let mut i = 0usize;
+
+        while i < len {
+            unsafe { destination.add(i).write_volatile(value) };
+            i += 1;
+        }
     }
 
     unsafe fn flush_range(_pointer: *mut u8, _len: usize) {

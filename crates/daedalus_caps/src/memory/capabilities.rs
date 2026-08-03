@@ -5,7 +5,7 @@
 use core::error::Error;
 
 use alloc::{boxed::Box, string::ToString, vec::Vec};
-use daedalus_program::RegionPermissions;
+use daedalus_program::{RegionMemKind, RegionPermissions};
 use lepton3::lepton_vm::{
     heap_allocator::{HeapAllocator, HeapItem},
     tagger::TagGenerator,
@@ -436,7 +436,7 @@ pub fn cap_mem_write<H: HeapAllocator, T: TagGenerator>(
 ///
 ///     [<top> `region`]
 ///
-/// If this tag refers to a `Region` as a `RegionHandle` then this will push 
+/// If this tag refers to a `Region` as a `RegionHandle` then this will push
 /// `true`, otherwise, false.
 ///
 /// The output will be as follows:
@@ -453,5 +453,117 @@ pub fn cap_is_region_handle<H: HeapAllocator, T: TagGenerator>(
         .contains_key(&handle);
 
     virtual_machine.stack.push(Value::Bool(held));
+    Ok(())
+}
+
+/// = `mem_copy`
+///
+/// Copies a range of bytes from one region to another region.
+///
+/// The arguments on the stack should be:
+///
+///     [<top> `len`, `src_offset`, `src_region`, `dst_offset`, `dst_region`]
+///
+/// The source region must have the `R` and the destination `W` permissions wise.
+///
+/// The `src_offset` and `dst_offset` with `len` must be valid within both
+/// regions and they both must be normal `Memory`.
+///
+/// Overlap between the two ranges is permitted. when `destination` > `source`
+/// the bytes are copied backwards, otherwise forwards.
+pub fn cap_mem_copy<H: HeapAllocator, T: TagGenerator>(
+    virtual_machine: &mut DaedalusVm<H, T>,
+) -> Result<(), Box<dyn Error>> {
+    // Pop arguments off
+    let len = pop_region_length(virtual_machine)?;
+    let source_offset = pop_region_offset(virtual_machine)?;
+    let source = pop_region(virtual_machine)?;
+    let destination_offset = pop_region_offset(virtual_machine)?;
+    let destination = pop_region(virtual_machine)?;
+
+    // We require `Memory` as per the header comment.
+    if source.kind == RegionMemKind::Memory || destination.kind == RegionMemKind::Memory {
+        Err(DaedalusCapErrors::BlockOperationOnNonMemoryRegion)?;
+    }
+
+    // Validate both ranges by checking without alignment since we don't require that for these
+    // non-mimo guys :)
+    let source_pointer =
+        source.resolve_without_checking_alignment(source_offset, len, RegionPermissions::R)?;
+    let destination_pointer = destination.resolve_without_checking_alignment(
+        destination_offset,
+        len,
+        RegionPermissions::W,
+    )?;
+
+    if len == 0 {
+        return Ok(());
+    }
+
+    // SAFETY:
+    //
+    // These writes have already been validated in terms permissions
+    // and ranges within the region system by the above `resolve_without_alignment`s.
+    unsafe { Arch::copy(source_pointer, destination_pointer, len) };
+
+    Ok(())
+}
+
+/// = `mem_fill`
+///
+/// Fills a byte range of a region with one repeated byte `Value`.
+///
+/// The arguments to the stack should be:
+///
+///     [<top> `len`, `value`, `offset`, `region`]
+///
+/// The region must be `W` and a `Memory`-kind region. The `offset` and
+/// `len` access should be within the rangeo f the `region`.
+pub fn cap_mem_fill<H: HeapAllocator, T: TagGenerator>(
+    virtual_machine: &mut DaedalusVm<H, T>,
+) -> Result<(), Box<dyn Error>> {
+    let len = pop_region_length(virtual_machine)?;
+
+    // The fill value as a byte.
+    let value = virtual_machine
+        .stack
+        .pop()
+        .ok_or(DaedalusCapErrors::StackUnderflowExpectedWriteValue)?;
+
+    let Value::UInt(fill_value) = value else {
+        return Err(DaedalusCapErrors::WriteValueExpected {
+            found_type: value_type_name(&value),
+        })?;
+    };
+
+    if fill_value > u64::from(u8::MAX) {
+        Err(DaedalusCapErrors::ValueTooWideForAccess {
+            value: fill_value,
+            width: 1,
+        })?;
+    }
+
+    let offset = pop_region_offset(virtual_machine)?;
+
+    // Get the region and ensure it's a `Memory`-kind region
+    let region = pop_region(virtual_machine)?;
+
+    if region.kind == RegionMemKind::Memory {
+        Err(DaedalusCapErrors::BlockOperationOnNonMemoryRegion)?;
+    }
+
+    // Check the perms/len in region
+    let pointer = region.resolve_without_checking_alignment(offset, len, RegionPermissions::W)?;
+
+    if len == 0 {
+        return Ok(());
+    }
+
+    // SAFETY:
+    //
+    // These writes have already been validated in terms permissions
+    // and ranges within the region system by the above `resolve_without_alignment`s.
+    unsafe { Arch::fill(pointer, fill_value as u8, len) };
+
     Ok(())
 }

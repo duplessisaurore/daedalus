@@ -206,6 +206,10 @@ pub enum DaedalusCapErrors {
     /// The value is too wide for access with the width
     /// provided !
     ValueTooWideForAccess { value: u64, width: usize },
+
+    /// A block-type operation of `copy`/`fill` occured on a non-
+    /// `Memory` kind region.
+    BlockOperationOnNonMemoryRegion,
 }
 
 impl Display for DaedalusCapErrors {
@@ -474,6 +478,12 @@ impl Display for DaedalusCapErrors {
                 write!(
                     f,
                     "daedalus expected a value to mem write that fit in width `{width}`, but instead got a value that doesnt fit! the value was `{value}`."
+                )
+            }
+            Self::BlockOperationOnNonMemoryRegion => {
+                write!(
+                    f,
+                    "daedalus expected that block operations (`copy`/`fill`) only occur on `Memory` type regions, but it was executed on a non-memory type region!"
                 )
             }
         }

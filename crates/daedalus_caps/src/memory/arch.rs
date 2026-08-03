@@ -36,9 +36,59 @@ pub trait MemoryArch {
     unsafe fn write(pointer: *mut u8, width: AccessWidth, value: u64);
 
     /// Copy some `len` bytes over from address at `source` to the address at `destination`
+    ///
+    /// These two locations are permitted to overlap, and the semantics should be as follows:
+    ///
+    /// The source values must never be overwritten, if `source` < `destination` < `source + len`
+    /// then we get this case:
+    ///
+    ///     here overwrites
+    ///          v
+    /// source | <----------(len)----------->
+    ///      destination | <----------(len)----------->
+    ///                     ^
+    ///                   here !
+    ///
+    /// In this case we copy backwards from source to destination
+    /// because else if we copy from the start of source to the
+    /// start of destination we are erasing data from source
+    ///
+    /// Otherwise the data should be copied in a forward manner to preserve the correctness of
+    /// the copying as follows:
+    ///
+    ///               source | <----------(len)----------->
+    ///      destination | <----------(len)----------->
+    ///
+    /// in which case we want to write forward to prevent
+    /// overwriting data in the same way.
+    ///
+    /// # Safety
+    ///
+    /// The implementation should ensure the accesses are aligned
+    /// if they must be, the memory must  be validated to be in
+    /// a `Memory`-type region (non-device memory).
+    ///
+    /// The caller must ensure that the current execution state (program)
+    /// has actual access to `len` bytes at `source` and to `len` bytes
+    /// at `destination`.
+    ///
+    /// The source access must be with `Read` permissions (`R`) and the
+    /// destination access with `Write` permissions (`W`).
     unsafe fn copy(source: *const u8, destination: *mut u8, len: usize);
 
     /// Fill some address at `destination` with `len` number of `value`-bytes
+    ///
+    /// Generally the same semantics as `copy`.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that the current execution state (program)
+    /// has actual access to `len` bytes at `destination`, with `Write`
+    /// permissions (`W`).
+    ///
+    /// The implementation should ensure the accesses are aligned
+    /// if they must be, The memory must be validated to be in a
+    /// `Memory`-type region (non-device memory).
     unsafe fn fill(destination: *mut u8, value: u8, len: usize);
 
     /// Flush a range of memory beginning at `pointer` with length of `len`
@@ -46,12 +96,29 @@ pub trait MemoryArch {
     /// This is for archs which need to flush the written data from the bootloader
     /// before it can be executed as instructions. (say flush from d-cache so i-cache
     /// can read it and execute it)
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that the current execution state (program)
+    /// has actual access to `len` bytes at `pointer`, with at least
+    /// `Read` permissions (`R`).
+    ///
+    /// The range must be addressable memory and must actually be
+    /// roundable to a cache line for flushing.
     unsafe fn flush_range(pointer: *mut u8, len: usize);
 
     /// Setup this specific architecture.
     ///
     /// Some architectures may require arch specific setup/teardown of previous
     /// stage things before `Daedalus` can start.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure this runs before any memory is ever written
+    /// to by `Daedalus` at all!!!
+    ///
+    /// The caller must ensure that `Daedalus` only ever runs on one core at
+    /// once.
     unsafe fn setup();
 
     /// Teardown this specific architecture.
@@ -59,6 +126,17 @@ pub trait MemoryArch {
     /// This should generally do the inverse of any setup that was required,
     /// such that we tore down anything `Daedalus` setup so that we can hand off
     /// to the OS/kernel plainly.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that every write through every possible bootloader
+    /// stage has already completed, and the only remaining operations are within
+    /// `Daedalus`'s handoff mechanisms.
+    ///
+    /// There must be no following `MemoryArch` operations.
+    ///
+    /// The caller must ensure that `Daedalus` only ever runs on one core at
+    /// once.
     unsafe fn teardown();
 }
 
