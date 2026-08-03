@@ -193,7 +193,7 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
             .call_function(entry, 0)
             .map_err(|_| DaedalusCapErrors::FailedToEnterProgramEntryPoint { name })?;
 
-        Self::from_initial_machine(image, name, grants, initial_machine_state)
+        Self::from_initial_machine(image, name, grants, HashMap::new(), initial_machine_state)
     }
 
     /// Does the same as `from_image_with_name` but
@@ -203,6 +203,10 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
     ///
     /// The `arg_heap_alloc` is required for the full recursive
     /// migration over into the new `InactiveProgram`.
+    /// 
+    /// `arg_regions` are the regions in the `arg`-program and it
+    /// is expected that if `arg` is a region handle then that region
+    /// handle exists in `arg_regions`.
     ///
     /// This does not guarantee the argument is passed to the new
     /// program if the new program's entry point does not take any
@@ -214,9 +218,13 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
         grants: &'static [Grant],
         arg: Value,
         arg_heap_alloc: &mut H,
+        arg_regions: &HashMap<RegionHandle, Region>
     ) -> Result<Self, DaedalusCapErrors> {
         let mut initial_machine_state =
             VirtualMachine::new(image, Vec::new(), H::default(), T::default(), ());
+
+        // These regions are being migrated over to the new program
+        let mut migrated_regions: HashMap<RegionHandle, Region> = HashMap::new();
 
         // Grab the entry point, and the number of args
         // we optionally parse the argument if there is one
@@ -239,6 +247,8 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
                     arg_heap_alloc,
                     &mut initial_machine_state.heap,
                     &mut initial_machine_state.tagger,
+                    arg_regions,
+                    &mut migrated_regions,
                     arg,
                 ));
                 initial_machine_state
@@ -249,7 +259,7 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
             _ => unreachable!("daedalus build validation handles this casee"),
         }
 
-        Self::from_initial_machine(image, name, grants, initial_machine_state)
+        Self::from_initial_machine(image, name, grants, migrated_regions, initial_machine_state)
     }
 
     /// Creates a new `InactiveProgram` that can be swapped into from
@@ -263,13 +273,19 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
         image: &'static I,
         name: &'static str,
         grants: &'static [Grant],
+        mut regions: HashMap<RegionHandle, Region>,
         mut initial_machine_state: VirtualMachine<'_, (), StaticSourceLocation, H, T, I>,
     ) -> Result<Self, DaedalusCapErrors> {
         // Turn the grants into `Regions` in our new initial machine state.
         let MintedGrantRegions {
-            regions,
+            regions: granted_regions,
             named_grants,
         } = mint_grants(grants, &mut initial_machine_state.tagger)?;
+
+        // The regions passed in here refer to the regions
+        // we are "granted" as the starting argument, we combine
+        // this with the actual regions from the program's grants.
+        regions.extend(granted_regions);
 
         Ok(Self {
             name,

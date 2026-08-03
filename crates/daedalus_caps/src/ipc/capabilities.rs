@@ -154,7 +154,13 @@ fn advance_phase<H: HeapAllocator, T: TagGenerator>(
             // spawn it with the arg
             Some(argument) if !exists => {
                 let source_heap = &mut virtual_machine.heap;
-                let state = &mut virtual_machine.capability_state;
+                
+                let DaedalusState {
+                    regions: source_regions,
+                    programs,
+                    ready_queue,
+                    ..
+                } = &mut virtual_machine.capability_state;
 
                 let program = InactiveProgram::from_image_with_name_and_arg(
                     next_phase.program.image,
@@ -162,10 +168,11 @@ fn advance_phase<H: HeapAllocator, T: TagGenerator>(
                     next_phase.program.grants,
                     argument,
                     source_heap,
+                    source_regions,
                 )?;
 
-                state.programs.insert(name, program);
-                state.ready_queue.push_back(name);
+                programs.insert(name, program);
+                ready_queue.push_back(name);
             }
 
             // Fresh spawn without an argument, this will spawn it for us
@@ -298,12 +305,17 @@ fn send_request<H: HeapAllocator, T: TagGenerator>(
     let caller_tag = CallTag(virtual_machine.tagger.allocate_tag());
 
     let caller_heap = &mut virtual_machine.heap;
-    let state = &mut virtual_machine.capability_state;
-    let caller_name = state.current_program;
+    let DaedalusState {
+        current_program,
+        regions: caller_regions,
+        programs,
+        ready_queue,
+        ..
+    } = &mut virtual_machine.capability_state;
+    let caller_name = *current_program;
 
     // Find the inactive destination program we are calling.
-    let destination_program = state
-        .programs
+    let destination_program = programs
         .get_mut(destination)
         .expect("checked to exist above");
 
@@ -315,6 +327,8 @@ fn send_request<H: HeapAllocator, T: TagGenerator>(
         caller_heap,
         &mut destination_program.heap,
         &mut destination_program.tagger,
+        caller_regions,
+        &mut destination_program.regions,
         argument,
     );
 
@@ -337,7 +351,7 @@ fn send_request<H: HeapAllocator, T: TagGenerator>(
 
     // Wake up the program if needed
     if destination_program.wake_recv() {
-        state.ready_queue.push_back(destination);
+        ready_queue.push_back(destination);
     }
 
     Ok(caller_tag)
@@ -547,18 +561,23 @@ pub fn cap_non_block_reply<H: HeapAllocator, T: TagGenerator>(
     let callee_tag = CallTag(tag);
 
     let replier_heap = &mut virtual_machine.heap;
-    let state = &mut virtual_machine.capability_state;
+    let DaedalusState {
+        regions: replier_regions,
+        pending_replies,
+        programs,
+        ready_queue,
+        ..
+    } = &mut virtual_machine.capability_state;
 
     // Find the corresponding call association, this is used to find
     // which program to actually reply to and the call tag in that program's tagger space.
-    let association = state
-        .pending_replies
+    let association = pending_replies
         .remove(&callee_tag)
         .ok_or(DaedalusCapErrors::UnknownReplyTag(callee_tag))?;
 
     // Try find the caller, since we don't guarantee that it still exists, else
     // it died~!! wehhh nooo shows my puppy tummy to u
-    let Some(caller_program) = state.programs.get_mut(association.caller_program) else {
+    let Some(caller_program) = programs.get_mut(association.caller_program) else {
         return Err(DaedalusCapErrors::CallerGone(association.caller_program).into());
     };
 
@@ -567,6 +586,8 @@ pub fn cap_non_block_reply<H: HeapAllocator, T: TagGenerator>(
         replier_heap,
         &mut caller_program.heap,
         &mut caller_program.tagger,
+        replier_regions,
+        &mut caller_program.regions,
         reply,
     );
 
@@ -581,7 +602,7 @@ pub fn cap_non_block_reply<H: HeapAllocator, T: TagGenerator>(
             .deliver_onto(&mut caller_program.stack);
 
             caller_program.state = ProgramState::Ready;
-            state.ready_queue.push_back(association.caller_program);
+            ready_queue.push_back(association.caller_program);
         }
         _ => {
             // Otherwise, just push this as a message to the caller program's inbox,
@@ -592,7 +613,7 @@ pub fn cap_non_block_reply<H: HeapAllocator, T: TagGenerator>(
             });
 
             if caller_program.wake_recv() {
-                state.ready_queue.push_back(association.caller_program);
+                ready_queue.push_back(association.caller_program);
             }
         }
     }

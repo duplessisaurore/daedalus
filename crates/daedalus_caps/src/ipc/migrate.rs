@@ -11,6 +11,8 @@ use lepton3::lepton_vm::{
     values::{Tag, Value},
 };
 
+use crate::memory::{Region, RegionHandle};
+
 /// This migrates the referred to value between two heap allocators
 /// and returns the new value if necessary.
 ///
@@ -25,10 +27,17 @@ use lepton3::lepton_vm::{
 /// do not clash with tags already allocated in `t`. This has the downside
 /// that the user can never technically know what it is, but is the only way that
 /// objects can be cleanly migrated.
+/// 
+/// All of the `tags` are also migrated as follows:
+///     - All tags are migrated to newly allocated tags in `t`, if the tag refers
+///     to a region in the `source_regions` then the region is automagically migrated
+///     to destination_regions with that new tag as the `RegionHandle`.
 pub fn migrate(
     a: &mut impl HeapAllocator,
     b: &mut impl HeapAllocator,
     t: &mut impl TagGenerator,
+    source_regions: &HashMap<RegionHandle, Region>,
+    destination_regions: &mut HashMap<RegionHandle, Region>,
     migratee: Value,
 ) -> Value {
     // These values have already been copied from `a` to `b`
@@ -50,6 +59,8 @@ pub fn migrate(
         a,
         b,
         t,
+        source_regions,
+        destination_regions,
         &mut forwarded,
         &mut forwarded_tags,
         &mut pending,
@@ -70,6 +81,8 @@ pub fn migrate(
                         a,
                         b,
                         t,
+                        source_regions,
+                        destination_regions,
                         &mut forwarded,
                         &mut forwarded_tags,
                         &mut pending,
@@ -87,6 +100,8 @@ pub fn migrate(
                         a,
                         b,
                         t,
+                        source_regions,
+                        destination_regions,
                         &mut forwarded,
                         &mut forwarded_tags,
                         &mut pending,
@@ -114,10 +129,13 @@ pub fn migrate(
 ///
 /// If it does not need to be migrated and simply can be copied,
 /// then it is simply copied in rust.
+#[allow(clippy::too_many_arguments)]
 fn migrate_value(
     a: &impl HeapAllocator,
     b: &mut impl HeapAllocator,
     t: &mut impl TagGenerator,
+    source_regions: &HashMap<RegionHandle, Region>,
+    destination_regions: &mut HashMap<RegionHandle, Region>,
     forwarded: &mut HashMap<usize, usize>,
     forwarded_tags: &mut HashMap<Tag, Tag>,
     pending: &mut Vec<usize>,
@@ -137,7 +155,18 @@ fn migrate_value(
         //
         // In order to keep this meaning intact and prevent any random collision
         // into the dest programs tag space, we allocate a new tag.
-        Value::Tag(tag) => Value::Tag(migrate_tag(tag, t, forwarded_tags)),
+        Value::Tag(tag) => {
+            let new_tag = migrate_tag(tag, t, forwarded_tags);
+
+            // If this tag refers to a region the in the source program then
+            // we copy over this as a RegionHandle with a new region in the 
+            // destination program's regions.
+            if let Some(region) = source_regions.get(&RegionHandle(tag)) {
+                destination_regions.insert(RegionHandle(new_tag), *region);
+            }
+
+            Value::Tag(new_tag)
+        }
 
         Value::Object(old_idx) => Value::Object(copy_item(a, b, forwarded, pending, old_idx)),
         Value::Array(old_idx) => Value::Array(copy_item(a, b, forwarded, pending, old_idx)),
