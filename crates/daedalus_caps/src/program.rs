@@ -203,7 +203,7 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
     ///
     /// The `arg_heap_alloc` is required for the full recursive
     /// migration over into the new `InactiveProgram`.
-    /// 
+    ///
     /// `arg_regions` are the regions in the `arg`-program and it
     /// is expected that if `arg` is a region handle then that region
     /// handle exists in `arg_regions`.
@@ -218,7 +218,7 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
         grants: &'static [Grant],
         arg: Value,
         arg_heap_alloc: &mut H,
-        arg_regions: &HashMap<RegionHandle, Region>
+        arg_regions: &HashMap<RegionHandle, Region>,
     ) -> Result<Self, DaedalusCapErrors> {
         let mut initial_machine_state =
             VirtualMachine::new(image, Vec::new(), H::default(), T::default(), ());
@@ -443,7 +443,7 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Daedalus
             pending_replies: HashMap::new(),
             inbox: VecDeque::new(),
             regions,
-            named_grants
+            named_grants,
         })
     }
 
@@ -452,9 +452,14 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Daedalus
     /// This will either find `name` in the current set of programs and
     /// mark it as ready if it is ready to be ready (e.g BlockOnRecv has inbox msg).
     /// or create a new program from the image associated with the program `name`.
-    /// 
+    ///
     /// The grants are used to setup the initial regions for this program.
-    pub fn make_ready(&mut self, name: &'static str, image: &'static I, grants: &'static [Grant]) -> Result<(), DaedalusCapErrors> {
+    pub fn make_ready(
+        &mut self,
+        name: &'static str,
+        image: &'static I,
+        grants: &'static [Grant],
+    ) -> Result<(), DaedalusCapErrors> {
         match self.programs.entry(name) {
             Entry::Occupied(mut entry) => {
                 // Mark as ready and push onto the queue

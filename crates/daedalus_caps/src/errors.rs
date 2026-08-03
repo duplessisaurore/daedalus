@@ -115,25 +115,29 @@ pub enum DaedalusCapErrors {
 
     /// Attempted to create a `Region` from a `Grant` that had a base up to ToStartDaedalus
     /// but the grant exceeded the actual starting address of daedalus!
-    GrantBaseAboveDaedalus {
-        role: &'static str,
-        base: usize
-    },
+    GrantBaseAboveDaedalus { role: &'static str, base: usize },
 
     /// Attempted to create a `Grant` up to the end of memory, except the base
     /// of the grant actually already excceeded the end of memory!
-    GrantBaseOutsideMemory {
-        role: &'static str,
-        base: usize
-    },
+    GrantBaseOutsideMemory { role: &'static str, base: usize },
 
     /// Attempted to create a new image with name `name`, which requires entering
     /// its entry point function, however this failed! and we could not enter its entry
     /// point function.
-    FailedToEnterProgramEntryPoint {
-        name: &'static str
-    }
-   
+    FailedToEnterProgramEntryPoint { name: &'static str },
+
+    /// Expected to pop a `role` for a `mem_grant` call in order
+    /// to grab a region from this `role`.
+    StackUnderflowExpectedGrantRole,
+
+    /// A grant role name was expected here
+    /// as per the capability, but a valid
+    /// one could not be found
+    GrantRoleExpected,
+
+    /// A grant call looked up a role that does not exist in
+    /// the manifest/grants of the current program
+    CouldNotFindGrantRole { looked_up_role: String },
 }
 
 impl Display for DaedalusCapErrors {
@@ -282,7 +286,25 @@ impl Display for DaedalusCapErrors {
                     "expected to be able to enter entry point of program with name `{name}` but this failed!"
                 )
             }
-         }
+            Self::StackUnderflowExpectedGrantRole => {
+                write!(
+                    f,
+                    "daedalus expected to find a grant `role` name on the stack but nothing was found!"
+                )
+            }
+            Self::GrantRoleExpected => {
+                write!(
+                    f,
+                    "daedalus expected a grant `role` name as a `Boson3` string value (UInt Array), found an invalid one!"
+                )
+            }
+            Self::CouldNotFindGrantRole { looked_up_role } => {
+                write!(
+                    f,
+                    "daedalus capability tried to look up grant with role `{looked_up_role}`, but could not find any grants with that role!"
+                )
+            }
+        }
     }
 }
 

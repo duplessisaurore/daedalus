@@ -154,7 +154,7 @@ fn advance_phase<H: HeapAllocator, T: TagGenerator>(
             // spawn it with the arg
             Some(argument) if !exists => {
                 let source_heap = &mut virtual_machine.heap;
-                
+
                 let DaedalusState {
                     regions: source_regions,
                     programs,
@@ -632,9 +632,9 @@ pub fn cap_non_block_reply<H: HeapAllocator, T: TagGenerator>(
 /// pushes a `true` onto the stack.
 ///
 /// Otherwise, false.
-/// 
+///
 /// The output will be as follows:
-/// 
+///
 ///     [<top> <is_replyable_tag>]
 ///
 /// This does not meet all possible forms of a `call_tag`, and does not attempt
@@ -666,7 +666,7 @@ pub fn cap_is_replyable_tag<H: HeapAllocator, T: TagGenerator>(
 /// = `caller_of`
 ///
 /// This capability consumes the top of the stack as follows:
-/// 
+///
 ///     [<top> `call_tag`]
 ///
 /// Returns the name of the program that sent the request this

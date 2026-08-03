@@ -92,7 +92,7 @@ impl Region {
     ///
     /// This does not check alignment of `width`, see `resolve`
     /// for that.
-    fn resolve_without_checking_alignment(
+    pub fn resolve_without_checking_alignment(
         &self,
         offset: usize,
         width: usize,
@@ -129,7 +129,7 @@ impl Region {
     ///
     /// This also checks for alignment of the `width` based on the `offset`
     /// and the `base` of the region.
-    fn resolve(
+    pub fn resolve(
         &self,
         offset: usize,
         width: usize,
@@ -273,3 +273,7 @@ pub fn mint_grants<T: TagGenerator>(
         named_grants,
     })
 }
+
+/// The actual capabilities themselves which provide memory
+/// access functionality
+pub mod capabilities;

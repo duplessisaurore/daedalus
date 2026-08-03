@@ -27,7 +27,7 @@ use crate::memory::{Region, RegionHandle};
 /// do not clash with tags already allocated in `t`. This has the downside
 /// that the user can never technically know what it is, but is the only way that
 /// objects can be cleanly migrated.
-/// 
+///
 /// All of the `tags` are also migrated as follows:
 ///     - All tags are migrated to newly allocated tags in `t`, if the tag refers
 ///     to a region in the `source_regions` then the region is automagically migrated
@@ -159,7 +159,7 @@ fn migrate_value(
             let new_tag = migrate_tag(tag, t, forwarded_tags);
 
             // If this tag refers to a region the in the source program then
-            // we copy over this as a RegionHandle with a new region in the 
+            // we copy over this as a RegionHandle with a new region in the
             // destination program's regions.
             if let Some(region) = source_regions.get(&RegionHandle(tag)) {
                 destination_regions.insert(RegionHandle(new_tag), *region);
