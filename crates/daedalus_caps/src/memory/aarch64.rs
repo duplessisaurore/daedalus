@@ -4,7 +4,10 @@
 //! This supplies the necessary underlying
 //! arch specific ops for memory caps.
 
-use crate::memory::{__dram_end, arch::{AccessWidth, MemoryArch}};
+use crate::memory::{
+    __dram_end,
+    arch::{AccessWidth, MemoryArch},
+};
 
 /// Right shift of the CTR_EL0 register required
 /// for reading `DMinLine` (min size of d-cache line)
@@ -154,18 +157,18 @@ impl MemoryArch for Aarch64 {
     ///
     /// We do the braindead but simple approach of just going over all possible cache
     /// lines and clean + invalidating them.
-    /// 
-    /// This is the almost the same as the `flush_range` but for all addresses on the 
+    ///
+    /// This is the almost the same as the `flush_range` but for all addresses on the
     /// system as we don't know which ones have data left in them.
-    /// 
-    /// We also flush the entirety of the instruction cache with `ic ialluis` 
+    ///
+    /// We also flush the entirety of the instruction cache with `ic ialluis`
     /// and then set the `I` field in `SCTLR_EL1` to enable the instruction cache such
-    /// that our interpreter yoinking can be a lot faster execution wise. 
+    /// that our interpreter yoinking can be a lot faster execution wise.
     unsafe fn setup() {
         // We assume that __dram_end is literally the end of memory, so we
         // invalidate up to then :)
         let end = (&raw const __dram_end) as usize;
-        
+
         // We cant flush range because we dont want to just clean,
         // we want to also invalidate!
         let cache_type: u64;
@@ -180,7 +183,7 @@ impl MemoryArch for Aarch64 {
         unsafe {
             // Invalidate every address... PERFORMANCE BE DAMNED
             for address in (0..end).step_by(dmin_line) {
-                    core::arch::asm!(
+                core::arch::asm!(
                     "dc civac, {}",
                     in(reg) address,
                     options(nostack, preserves_flags)
@@ -206,10 +209,10 @@ impl MemoryArch for Aarch64 {
                 out(reg) system_control,
                 options(nomem, nostack, preserves_flags)
             );
-            
+
             // Set flag and write back
             system_control |= SCTLR_INSTRUCTION_CACHE;
-            
+
             core::arch::asm!(
                 "msr sctlr_el1, {}",
                 "isb",
@@ -217,7 +220,6 @@ impl MemoryArch for Aarch64 {
                 options(nostack, preserves_flags)
             );
         }
-
     }
 
     /// Idk lol leave everything from setup 😂😂😂😂😂😂😂😂😂

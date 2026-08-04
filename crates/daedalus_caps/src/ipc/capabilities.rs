@@ -712,3 +712,28 @@ pub fn cap_caller_of<H: HeapAllocator, T: TagGenerator>(
     virtual_machine.stack.push(Value::Array(index));
     Ok(())
 }
+
+/// = `yield_now`
+///
+/// This capability allows a program to yield optionally back into
+/// the `Ready` state if this program is waiting for some data to arrive.
+///
+/// Nothing is changed in the stack.
+///
+/// This is not a true yield, if there are no other ready programs instead
+/// this calls the archs machine instruction that tells it we are
+/// essentially spin-looping instead of infinitely yielding back to itself
+/// through the actual `Daedalus` program scheduling mechanism (since it'd
+/// end up back here anyway).
+pub fn cap_yield_now<H: HeapAllocator, T: TagGenerator>(
+    virtual_machine: &mut DaedalusVm<H, T>,
+) -> Result<(), Box<dyn Error>> {
+    // As there's nobody to swap to, theres no point swapping! we just spin loop :)
+    if virtual_machine.capability_state.ready_queue.is_empty() {
+        core::hint::spin_loop();
+        return Ok(());
+    }
+
+    run_next_ready(virtual_machine, Some(ProgramState::Ready))?;
+    Ok(())
+}
