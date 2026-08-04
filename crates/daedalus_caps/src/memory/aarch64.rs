@@ -6,6 +6,17 @@
 
 use crate::memory::arch::{AccessWidth, MemoryArch};
 
+/// Right shift of the CTR_EL0 register required
+/// for reading `DMinLine` (min size of d-cache line)
+const DMINLINE_SHIFT: u64 = 16;
+
+/// Right shift of the CTR_EL0 register required
+/// for reading `IMinLine` (min size of i-cache line)
+const IMINLINE_SHIFT: u64 = 0;
+
+/// Mask for the actual line size for the IMINLINE/DMINLINE shifts
+const LINE_MASK: u64 = 0xf;
+
 /// The `AArch64` memory operations
 ///
 /// These are for `ARM 64-bit` platforms
@@ -78,8 +89,56 @@ impl MemoryArch for Aarch64 {
         }
     }
 
-    unsafe fn flush_range(_pointer: *mut u8, _len: usize) {
-        todo!()
+    /// We need to basically ensure that the kernel image we wrote
+    /// can be visible to any non-cache coherent observer.
+    ///
+    /// same for the instruction yoinker :3c so we can actually execute it
+    unsafe fn flush_range(pointer: *mut u8, len: usize) {
+        // Get the cache type/info, this is stored in the CTR_EL0 register
+        let cache_type: u64;
+        let ptr_usize = pointer as usize;
+
+        unsafe {
+            core::arch::asm!("mrs {}, ctr_el0", out(reg) cache_type, options(nomem, nostack, preserves_flags));
+        }
+
+        // Read `DMinLine` and `IMinLine` for both cache types for flushing
+        let dmin_line = 4usize << ((cache_type >> DMINLINE_SHIFT) & LINE_MASK);
+        let imin_line = 4usize << ((cache_type >> IMINLINE_SHIFT) & LINE_MASK);
+
+        // Round down pointer to the nearest starting/ending lines for d/i cache
+        let dstart = ptr_usize & !(dmin_line - 1);
+        let istart = ptr_usize & !(imin_line - 1);
+
+        let end = ptr_usize + len;
+        let dend = (end + dmin_line - 1) & !(dmin_line - 1);
+        let iend = (end + imin_line - 1) & !(imin_line - 1);
+
+        unsafe {
+            // Clear each d-cache line between the start & end
+            // we use cvac so non-cpu guys can see it too :) (all observers)
+            let mut address = dstart;
+            while address < dend {
+                core::arch::asm!("dc cvac, {}", in(reg) address, options(nostack, preserves_flags));
+                address += dmin_line;
+            }
+
+            // ensure all previous memory ops before this barrier are done
+            core::arch::asm!("dsb sy", options(nostack, preserves_flags));
+
+            // clear each i-cache line
+            address = istart;
+            while address < iend {
+                core::arch::asm!("ic ivau, {}", in(reg) address, options(nostack, preserves_flags));
+                address += imin_line;
+            }
+
+            // ensure ops completed
+            core::arch::asm!("dsb sy", options(nostack, preserves_flags));
+
+            // flush the processor pipeline so that we fetch new instructions
+            core::arch::asm!("isb", options(nostack, preserves_flags));
+        }
     }
 
     unsafe fn setup() {

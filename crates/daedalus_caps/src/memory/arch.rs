@@ -74,6 +74,8 @@ pub trait MemoryArch {
     ///
     /// The source access must be with `Read` permissions (`R`) and the
     /// destination access with `Write` permissions (`W`).
+    ///
+    /// The caller must ensure len > 0.
     unsafe fn copy(source: *const u8, destination: *mut u8, len: usize);
 
     /// Fill some address at `destination` with `len` number of `value`-bytes
@@ -89,6 +91,8 @@ pub trait MemoryArch {
     /// The implementation should ensure the accesses are aligned
     /// if they must be, The memory must be validated to be in a
     /// `Memory`-type region (non-device memory).
+    ///
+    /// The caller must ensure len > 0.
     unsafe fn fill(destination: *mut u8, value: u8, len: usize);
 
     /// Flush a range of memory beginning at `pointer` with length of `len`
@@ -105,6 +109,8 @@ pub trait MemoryArch {
     ///
     /// The range must be addressable memory and must actually be
     /// roundable to a cache line for flushing.
+    ///
+    /// The caller must ensure len > 0.
     unsafe fn flush_range(pointer: *mut u8, len: usize);
 
     /// Setup this specific architecture.

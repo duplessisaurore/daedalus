@@ -567,3 +567,41 @@ pub fn cap_mem_fill<H: HeapAllocator, T: TagGenerator>(
 
     Ok(())
 }
+
+/// = `mem_flush`
+///
+/// Flushes the data cache, making the range visible to non-cache
+/// coherent observers and instruction fetch (for cpu :3)
+///
+/// The arguments to the stack should be:
+///
+///     [<top> `len`, `offset`, `region`]
+///
+/// The region must carry `R`, the `offset` and `len` must be a valid range
+/// within `region`.
+///
+/// This essentially clears the `d-cache`, `i-cache` and instruction pipeline.
+///
+pub fn cap_mem_flush<H: HeapAllocator, T: TagGenerator>(
+    virtual_machine: &mut DaedalusVm<H, T>,
+) -> Result<(), Box<dyn Error>> {
+    let len = pop_region_length(virtual_machine)?;
+    let offset = pop_region_offset(virtual_machine)?;
+    let region = pop_region(virtual_machine)?;
+
+    // We are flushing on lines, so alignment doesnt rlly matter.
+    let pointer = region.resolve_without_checking_alignment(offset, len, RegionPermissions::R)?;
+
+    // Device memory is never cached anyway, so no point.
+    if region.kind == RegionMemKind::Device || len == 0 {
+        return Ok(());
+    }
+
+    // SAFETY:
+    //
+    // This flush has already been validated in terms permissions
+    // and ranges within the region system by the above `resolve_without_alignment`.
+    unsafe { Arch::flush_range(pointer, len) };
+
+    Ok(())
+}
