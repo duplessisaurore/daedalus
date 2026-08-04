@@ -482,7 +482,7 @@ pub fn cap_mem_copy<H: HeapAllocator, T: TagGenerator>(
     let destination = pop_region(virtual_machine)?;
 
     // We require `Memory` as per the header comment.
-    if source.kind == RegionMemKind::Memory || destination.kind == RegionMemKind::Memory {
+    if !(source.kind == RegionMemKind::Memory) || !(destination.kind == RegionMemKind::Memory) {
         Err(DaedalusCapErrors::BlockOperationOnNonMemoryRegion)?;
     }
 
@@ -548,7 +548,7 @@ pub fn cap_mem_fill<H: HeapAllocator, T: TagGenerator>(
     // Get the region and ensure it's a `Memory`-kind region
     let region = pop_region(virtual_machine)?;
 
-    if region.kind == RegionMemKind::Memory {
+    if region.kind != RegionMemKind::Memory {
         Err(DaedalusCapErrors::BlockOperationOnNonMemoryRegion)?;
     }
 
