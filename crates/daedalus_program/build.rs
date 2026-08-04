@@ -483,7 +483,7 @@ fn main() {
             let len_expr = match grant.len {
                 GrantLenSpec::Bytes(len) => format!("GrantLen::Bytes({len}usize)"),
                 GrantLenSpec::Keyword(kwrd) => match kwrd {
-                    GrantLenKeyword::ToEndOfMemory => "GrantLen::ToEndOfDram".to_string(),
+                    GrantLenKeyword::ToEndOfMemory => "GrantLen::ToEndOfMemory".to_string(),
                     GrantLenKeyword::ToStartDaedalus => "GrantLen::ToStartDaedalus".to_string(),
                 },
             };
