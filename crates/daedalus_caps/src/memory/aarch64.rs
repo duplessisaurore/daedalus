@@ -17,6 +17,13 @@ const IMINLINE_SHIFT: u64 = 0;
 /// Mask for the actual line size for the IMINLINE/DMINLINE shifts
 const LINE_MASK: u64 = 0xf;
 
+/// Right shift of the CLIDR_EL1 register for reading
+/// out the level of coherency (first coherent level)
+const LOC_SHIFT: u64 = 24;
+
+/// Mask for the level of coherency field in CLIDR_EL1
+const LOC_MASK: u64 = 0x7;
+
 /// The `AArch64` memory operations
 ///
 /// These are for `ARM 64-bit` platforms
@@ -55,9 +62,7 @@ impl MemoryArch for Aarch64 {
         if (destination as usize) > (source as usize)
             && (destination as usize) < (source as usize) + len
         {
-            let mut i = len;
-            while i > 0 {
-                i -= 1;
+            for i in (0..len).rev() {
                 unsafe {
                     destination
                         .add(i)
@@ -69,23 +74,18 @@ impl MemoryArch for Aarch64 {
         }
 
         // Forward-case, see comment of `copy`
-        let mut i = 0usize;
-        while i < len {
+        for i in 0..len {
             unsafe {
                 destination
                     .add(i)
                     .write_volatile(source.add(i).read_volatile())
             };
-            i += 1;
         }
     }
 
     unsafe fn fill(destination: *mut u8, value: u8, len: usize) {
-        let mut i = 0usize;
-
-        while i < len {
+        for i in 0..len {
             unsafe { destination.add(i).write_volatile(value) };
-            i += 1;
         }
     }
 
@@ -141,11 +141,75 @@ impl MemoryArch for Aarch64 {
         }
     }
 
+    /// The setup for aarch64 involves these steps:
+    ///
+    /// Generally we can't exactly trust the stage before `Daedalus`
+    /// to not accidentally leave things in cache while `Daedalus` operates
+    /// in a state with the MMU off.
+    ///
+    /// The issue with this is that `Daedalus`'s stores because we r currently
+    /// in Device-nGnRnE memory everywhere we just bypass all caches and write
+    /// straight out to DRAM.
+    ///
+    /// Later when the cache evicts the lines from the prior stage, this overwrites
+    /// our stuff ! bad :(
+    ///
+    /// So we need to first clean and invalidate all cache lines before `Daedalus`
+    /// and then we can begin with our execution!
+    ///
+    /// To do this we follow these steps:
+    ///
+    /// Clearning RAM is too large (2GB of vaddr to clear by on ZCU106), cache is a lot
+    /// smaller but theres no magical clear all d-cache instruction.
+    ///
+    /// Instead we need to traverse all levels of cache up to the level of coherency and
+    /// essentailly clean and invalidate every slot in the cache (rather than DRAM) as that
+    /// would be way too many instructions for DRAM.
+    ///
+    /// Caches are indexed as sets x ways, and we can clean and invalidate each
+    /// set x way index using `dc cisw` (clean invalidate set/way).
+    ///
+    /// the main issue is we need to traverse all the cache levels up, find all their shapes
+    /// with sets/ways, plug that into `dc cisw`.
+    ///
+    /// The cache info is stored in `CLIDR_EL1` (what caches exist/level of coherency) and
+    /// then we need to grab each individual caches info using `CSSELR_EL1` to select
+    /// the cache and then `CCSIDR_EL1` for that cache. (isb to sync update)
+    ///
+    /// once we get all of the sets and ways for this, we can then just iterate over all
+    /// pairs and clean/invalidate them with `dc cisw`
+    ///
+    /// Then we clear the instruction cache too, with `ic iallu`, `isb`.
+    ///
+    /// Next, we set `SCTLR_EL1` at `I` to 1, which enables the instruction cache. (after
+    /// we reset the old cache) which is really nice for our interpreter :)
     unsafe fn setup() {
-        todo!()
+        // Read out CLIDR_EL1
+        let cache_level_id: u64;
+
+        // this is readable at EL1 which is where we should've been dropped of at.
+        unsafe {
+            core::arch::asm!(
+                "mrs {}, clidr_el1",
+                out(reg) cache_level_id,
+                options(nomem, nostack, preserves_flags)
+            );
+        }
+
+        // read out the level of coherency, we go through all non-coherent levels
+        let level_of_coherency = ((cache_level_id >> LOC_SHIFT) & LOC_MASK) as u32;
+
+        // we now need to clear each level
     }
 
+    /// Idk lol leave everything from setup 😂😂😂😂😂😂😂😂😂
     unsafe fn teardown() {
-        todo!()
+        // 😂😂😂😂😂   😂😂😂😂
+        // 😂                 😂
+        // 😂                😂
+        // 😂😂😂😂😂       😂
+        // 😂      😂       😂
+        // 😂      😂      😂
+        // 😂😂😂😂😂     😂
     }
 }

@@ -50,17 +50,17 @@ pub struct RegionHandle(pub Tag);
 #[derive(Clone, Copy, Debug)]
 pub struct Region {
     /// The start point of the memory region in bytes
-    pub base: usize,
+    base: usize,
 
     /// The size of the memory region in bytes
-    pub len: usize,
+    len: usize,
 
     /// The access permissions to grant to this program
     /// under this region
-    pub perms: RegionPermissions,
+    perms: RegionPermissions,
 
     /// The kind of memory belonging to this region
-    pub kind: RegionMemKind,
+    kind: RegionMemKind,
 }
 
 impl Region {
@@ -144,16 +144,18 @@ impl Region {
         width: usize,
         need: RegionPermissions,
     ) -> Result<*mut u8, DaedalusCapErrors> {
+        let pointer = self.resolve_without_checking_alignment(offset, width, need)?;
+
         // Ensure the address is aligned at this width we are
         // accessing at (grrr)
-        if width != 0 && !(self.base + offset).is_multiple_of(width) {
+        if width != 0 && !(pointer as usize).is_multiple_of(width) {
             return Err(DaedalusCapErrors::Misaligned {
-                address: self.base + offset,
+                address: pointer as usize,
                 width,
             });
         }
 
-        self.resolve_without_checking_alignment(offset, width, need)
+        Ok(pointer)
     }
 
     /// Creates a sub-region of this region with the requirements being:
