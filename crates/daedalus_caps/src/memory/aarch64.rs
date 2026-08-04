@@ -4,7 +4,7 @@
 //! This supplies the necessary underlying
 //! arch specific ops for memory caps.
 
-use crate::memory::arch::{AccessWidth, MemoryArch};
+use crate::memory::{__dram_end, arch::{AccessWidth, MemoryArch}};
 
 /// Right shift of the CTR_EL0 register required
 /// for reading `DMinLine` (min size of d-cache line)
@@ -17,12 +17,9 @@ const IMINLINE_SHIFT: u64 = 0;
 /// Mask for the actual line size for the IMINLINE/DMINLINE shifts
 const LINE_MASK: u64 = 0xf;
 
-/// Right shift of the CLIDR_EL1 register for reading
-/// out the level of coherency (first coherent level)
-const LOC_SHIFT: u64 = 24;
-
-/// Mask for the level of coherency field in CLIDR_EL1
-const LOC_MASK: u64 = 0x7;
+/// This is the `I` flag of the `SCTLR_EL1` register, setting this
+/// to 1 will enable the instruction cache.
+const SCTLR_INSTRUCTION_CACHE: u64 = 1 << 12;
 
 /// The `AArch64` memory operations
 ///
@@ -117,20 +114,16 @@ impl MemoryArch for Aarch64 {
         unsafe {
             // Clear each d-cache line between the start & end
             // we use cvac so non-cpu guys can see it too :) (all observers)
-            let mut address = dstart;
-            while address < dend {
+            for address in (dstart..dend).step_by(dmin_line) {
                 core::arch::asm!("dc cvac, {}", in(reg) address, options(nostack, preserves_flags));
-                address += dmin_line;
             }
 
             // ensure all previous memory ops before this barrier are done
             core::arch::asm!("dsb sy", options(nostack, preserves_flags));
 
             // clear each i-cache line
-            address = istart;
-            while address < iend {
+            for address in (istart..iend).step_by(imin_line) {
                 core::arch::asm!("ic ivau, {}", in(reg) address, options(nostack, preserves_flags));
-                address += imin_line;
             }
 
             // ensure ops completed
@@ -159,47 +152,72 @@ impl MemoryArch for Aarch64 {
     ///
     /// To do this we follow these steps:
     ///
-    /// Clearning RAM is too large (2GB of vaddr to clear by on ZCU106), cache is a lot
-    /// smaller but theres no magical clear all d-cache instruction.
-    ///
-    /// Instead we need to traverse all levels of cache up to the level of coherency and
-    /// essentailly clean and invalidate every slot in the cache (rather than DRAM) as that
-    /// would be way too many instructions for DRAM.
-    ///
-    /// Caches are indexed as sets x ways, and we can clean and invalidate each
-    /// set x way index using `dc cisw` (clean invalidate set/way).
-    ///
-    /// the main issue is we need to traverse all the cache levels up, find all their shapes
-    /// with sets/ways, plug that into `dc cisw`.
-    ///
-    /// The cache info is stored in `CLIDR_EL1` (what caches exist/level of coherency) and
-    /// then we need to grab each individual caches info using `CSSELR_EL1` to select
-    /// the cache and then `CCSIDR_EL1` for that cache. (isb to sync update)
-    ///
-    /// once we get all of the sets and ways for this, we can then just iterate over all
-    /// pairs and clean/invalidate them with `dc cisw`
-    ///
-    /// Then we clear the instruction cache too, with `ic iallu`, `isb`.
-    ///
-    /// Next, we set `SCTLR_EL1` at `I` to 1, which enables the instruction cache. (after
-    /// we reset the old cache) which is really nice for our interpreter :)
+    /// We do the braindead but simple approach of just going over all possible cache
+    /// lines and clean + invalidating them.
+    /// 
+    /// This is the almost the same as the `flush_range` but for all addresses on the 
+    /// system as we don't know which ones have data left in them.
+    /// 
+    /// We also flush the entirety of the instruction cache with `ic ialluis` 
+    /// and then set the `I` field in `SCTLR_EL1` to enable the instruction cache such
+    /// that our interpreter yoinking can be a lot faster execution wise. 
     unsafe fn setup() {
-        // Read out CLIDR_EL1
-        let cache_level_id: u64;
+        // We assume that __dram_end is literally the end of memory, so we
+        // invalidate up to then :)
+        let end = (&raw const __dram_end) as usize;
+        
+        // We cant flush range because we dont want to just clean,
+        // we want to also invalidate!
+        let cache_type: u64;
 
-        // this is readable at EL1 which is where we should've been dropped of at.
         unsafe {
+            core::arch::asm!("mrs {}, ctr_el0", out(reg) cache_type, options(nomem, nostack, preserves_flags));
+        }
+
+        // Same steps as `flush_range`, read dmin_line to iterate over line size.
+        let dmin_line = 4usize << ((cache_type >> DMINLINE_SHIFT) & LINE_MASK);
+
+        unsafe {
+            // Invalidate every address... PERFORMANCE BE DAMNED
+            for address in (0..end).step_by(dmin_line) {
+                    core::arch::asm!(
+                    "dc civac, {}",
+                    in(reg) address,
+                    options(nostack, preserves_flags)
+                );
+            }
+
+            // Same as `flush_range`, but we invalidate the entire instruction cache
+            // instead of only the ones in range, as its one instruction only.
+            core::arch::asm!("dsb sy", options(nostack, preserves_flags));
+            core::arch::asm!("ic ialluis", options(nostack, preserves_flags));
+            core::arch::asm!("dsb sy", options(nostack, preserves_flags));
+            core::arch::asm!("isb", options(nostack, preserves_flags));
+        }
+
+        // Enable instruction caching with `SCTLR_EL1`
+        let mut system_control: u64;
+
+        unsafe {
+            // Read the current value out, as we only want to enable
+            // the instruction cache
             core::arch::asm!(
-                "mrs {}, clidr_el1",
-                out(reg) cache_level_id,
+                "mrs {}, sctlr_el1",
+                out(reg) system_control,
                 options(nomem, nostack, preserves_flags)
+            );
+            
+            // Set flag and write back
+            system_control |= SCTLR_INSTRUCTION_CACHE;
+            
+            core::arch::asm!(
+                "msr sctlr_el1, {}",
+                "isb",
+                in(reg) system_control,
+                options(nostack, preserves_flags)
             );
         }
 
-        // read out the level of coherency, we go through all non-coherent levels
-        let level_of_coherency = ((cache_level_id >> LOC_SHIFT) & LOC_MASK) as u32;
-
-        // we now need to clear each level
     }
 
     /// Idk lol leave everything from setup 😂😂😂😂😂😂😂😂😂
