@@ -10,14 +10,11 @@ use lepton3::lepton_vm::values::Tag;
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone, Copy)]
 pub struct IrqHandle(pub Tag);
 
-/// A registrated binding of an IRQ with some
-/// interrupt ID to a program's IRQHandle that refers
-/// to this binding.
+/// A registrated binding of an IRQ to a program.
+/// 
+/// This should be referred to by some `IRQ` int id.
 #[derive(Clone, Copy, Debug)]
 pub struct IrqBinding {
-    /// The hardware interrupt ID.
-    pub interupt_id: u32,
-
     /// Which program receives messages for this
     pub program: &'static str,
 

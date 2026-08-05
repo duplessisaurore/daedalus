@@ -6,6 +6,7 @@ members = [
 resolver = "3"
 
 [workspace.dependencies]
+hashbrown = "0.17.1"
 lepton3 = { version = "10.0.1", git = "https://github.com/duplessisaurore/lepton3" }
 daedalus_program = { path = "./crates/daedalus_program" }
 daedalus_caps = { path = "./crates/daedalus_caps" }

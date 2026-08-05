@@ -13,6 +13,6 @@ license = "AGPLv3"
 keywords = ["languages", "scripting", "script"]
 
 [dependencies]
-hashbrown = "0.17.1"
+hashbrown = { workspace = true }
 lepton3 = { workspace = true }
 daedalus_program = { workspace = true }
