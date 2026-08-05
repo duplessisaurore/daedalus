@@ -26,6 +26,10 @@ pub mod ipc;
 /// programs
 pub mod memory;
 
+/// Capabilities that provide for IRQ management and
+/// handling from programs
+pub mod irq;
+
 /// Errors that can occur during the running of the IPC
 /// capabilities/phase driving caps
 pub mod errors;
