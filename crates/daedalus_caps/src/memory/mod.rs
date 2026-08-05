@@ -26,15 +26,6 @@ unsafe extern "C" {
 /// all the `Daedalus` memory ops.
 pub mod arch;
 
-/// The architecture this build targets for memory operations.
-///
-/// Generally one is required for compilation
-#[cfg(target_arch = "aarch64")]
-pub type Arch = aarch64::Aarch64;
-
-#[cfg(target_arch = "aarch64")]
-pub mod aarch64;
-
 /// A unique memory region's tag handle which is
 /// associated with some region
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone, Copy)]
@@ -288,3 +279,13 @@ pub fn mint_grants<T: TagGenerator>(
 /// The actual capabilities themselves which provide memory
 /// access functionality
 pub mod capabilities;
+
+// Specific memory architecture selection
+cfg_if::cfg_if! {
+    if #[cfg(target_arch = "aarch64")] {
+        mod aarch64;
+        pub type TargetMemoryArch = aarch64::Aarch64;
+    } else {
+        compile_error!("no target memory architecture selected when memory was attempted to be used; enable an option");
+    }
+}

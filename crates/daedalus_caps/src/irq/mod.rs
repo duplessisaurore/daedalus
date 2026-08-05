@@ -22,3 +22,24 @@ pub struct IrqBinding {
     /// binding in the program's space.
     pub irq_handle: IrqHandle,
 }
+
+/// The pending map, this is how we tell
+/// in the normal context what irqs have been
+/// fired from the IRQ context to signal the
+/// correct processes with
+pub mod pending;
+
+/// Generic abstraction layer trait
+/// for architecture specific elements
+///
+/// if an arch impls this trait, they impl
+/// all the `Daedalus` IRQ ops.
+pub mod arch;
+
+// Specific IRQ architecture selection
+cfg_if::cfg_if! {
+    if #[cfg(all(target_arch = "aarch64", feature = "gicv2"))] {
+    } else {
+        compile_error!("no target IRQ architecture selected when IRQs were attempted to be used; enable an option");
+    }
+}

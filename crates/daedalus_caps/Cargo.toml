@@ -14,5 +14,9 @@ keywords = ["languages", "scripting", "script"]
 
 [dependencies]
 hashbrown = { workspace = true }
+cfg-if = { workspace = true }
 lepton3 = { workspace = true }
 daedalus_program = { workspace = true }
+
+[features]
+gicv2 = []

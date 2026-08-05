@@ -17,7 +17,7 @@ use crate::{
     errors::DaedalusCapErrors,
     ipc::capabilities::DaedalusVm,
     memory::{
-        Arch, Region, RegionHandle,
+        TargetMemoryArch, Region, RegionHandle,
         arch::{AccessWidth, MemoryArch},
     },
 };
@@ -366,7 +366,7 @@ pub fn cap_mem_read<H: HeapAllocator, T: TagGenerator>(
     //
     // This read is already validated in terms of alignment and permissions
     // within the region system by the above `resolve`.
-    let value = unsafe { Arch::read(pointer, width) };
+    let value = unsafe { TargetMemoryArch::read(pointer, width) };
 
     virtual_machine.stack.push(Value::UInt(value));
     Ok(())
@@ -425,7 +425,7 @@ pub fn cap_mem_write<H: HeapAllocator, T: TagGenerator>(
     //
     // This write is already validated in terms of alignment and permissions
     // within the region system by the above `resolve`.
-    unsafe { Arch::write(pointer, width, uint_write_out_value) };
+    unsafe { TargetMemoryArch::write(pointer, width, uint_write_out_value) };
 
     Ok(())
 }
@@ -504,7 +504,7 @@ pub fn cap_mem_copy<H: HeapAllocator, T: TagGenerator>(
     //
     // These writes have already been validated in terms permissions
     // and ranges within the region system by the above `resolve_without_alignment`s.
-    unsafe { Arch::copy(source_pointer, destination_pointer, len) };
+    unsafe { TargetMemoryArch::copy(source_pointer, destination_pointer, len) };
 
     Ok(())
 }
@@ -563,7 +563,7 @@ pub fn cap_mem_fill<H: HeapAllocator, T: TagGenerator>(
     //
     // These writes have already been validated in terms permissions
     // and ranges within the region system by the above `resolve_without_alignment`s.
-    unsafe { Arch::fill(pointer, fill_value as u8, len) };
+    unsafe { TargetMemoryArch::fill(pointer, fill_value as u8, len) };
 
     Ok(())
 }
@@ -601,7 +601,7 @@ pub fn cap_mem_flush<H: HeapAllocator, T: TagGenerator>(
     //
     // This flush has already been validated in terms permissions
     // and ranges within the region system by the above `resolve_without_alignment`.
-    unsafe { Arch::flush_range(pointer, len) };
+    unsafe { TargetMemoryArch::flush_range(pointer, len) };
 
     Ok(())
 }
