@@ -14,11 +14,8 @@ use lepton3::lepton_vm::{
 };
 
 use crate::{
-    errors::DaedalusCapErrors,
-    ipc::capabilities::DaedalusVm,
-    memory::{
-        TargetMemoryArch, Region, RegionHandle,
-        arch::{AccessWidth, MemoryArch},
+    errors::DaedalusCapErrors, ipc::capabilities::DaedalusVm, memory::{
+        Region, RegionHandle, arch::{AccessWidth, MemoryArch}, archs::TargetMemoryArch,
     },
 };
 

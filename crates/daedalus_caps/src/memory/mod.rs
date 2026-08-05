@@ -280,12 +280,5 @@ pub fn mint_grants<T: TagGenerator>(
 /// access functionality
 pub mod capabilities;
 
-// Specific memory architecture selection
-cfg_if::cfg_if! {
-    if #[cfg(target_arch = "aarch64")] {
-        mod aarch64;
-        pub type TargetMemoryArch = aarch64::Aarch64;
-    } else {
-        compile_error!("no target memory architecture selected when memory was attempted to be used; enable an option");
-    }
-}
+/// The specific memory architecture we are using
+pub mod archs;
