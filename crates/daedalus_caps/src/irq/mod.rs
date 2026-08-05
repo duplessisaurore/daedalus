@@ -36,10 +36,6 @@ pub mod pending;
 /// all the `Daedalus` IRQ ops.
 pub mod arch;
 
-// Specific IRQ architecture selection
-cfg_if::cfg_if! {
-    if #[cfg(all(target_arch = "aarch64", feature = "gicv2"))] {
-    } else {
-        compile_error!("no target IRQ architecture selected when IRQs were attempted to be used; enable an option");
-    }
-}
+/// The specific architecture that we
+/// are using for this build for IRQ
+pub mod archs;

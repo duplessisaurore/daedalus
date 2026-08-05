@@ -15,11 +15,13 @@
 //! This only supports single-core execution, not SMP as
 //! the data structure is inherently not atomic/exclusive.
 
+use crate::irq::{arch::IrqArch, archs::TargetIRQArch};
+
 /// How many bits to use for one "word" in the bitmap (one unit of
 /// bit storage)
 const BITMAP_WORD_SIZE: usize = 64;
 
 /// The number of words in the bitmap of pending IRQ's
 /// to be handled.
-const PENDING_BITMAP_SIZE: usize = Arch::INTERUPT_IDS.div_ceil(BITMAP_WORD_SIZE);
+const PENDING_BITMAP_SIZE: usize = TargetIRQArch::INTERUPT_IDS.div_ceil(BITMAP_WORD_SIZE);
 
