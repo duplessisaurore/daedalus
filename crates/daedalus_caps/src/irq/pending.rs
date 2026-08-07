@@ -7,6 +7,8 @@
 
 use daedalus_program::TOTAL_POSSIBLE_SIMULTANEOUS_INTERRUPTS;
 
+use crate::irq::{arch::IrqArch, archs::TargetIRQArch};
+
 /// These are every single unique possible interrupt combination.
 ///
 /// It is not possible to exceed
@@ -40,7 +42,7 @@ pub unsafe fn record_pending_interrupt(interrupt_id: u32) {
     unsafe {
         // Read the current number of items in `PENDING_INTERRUPTS`
         let count = (&raw const PENDING_COUNT).read_volatile();
-        debug_assert!(count <= TOTAL_POSSIBLE_SIMULTANEOUS_INTERRUPTS);
+        debug_assert!(count < TOTAL_POSSIBLE_SIMULTANEOUS_INTERRUPTS);
 
         // Add to `PENDING_INTERRUPTS`, this is safe because we are only
         // one core, with the assumption of the dedup above
@@ -93,7 +95,7 @@ pub unsafe fn pending_any() -> bool {
 /// which is only possible in the normal context!
 pub fn drain_pending_into_buf(buf: &mut [u32; TOTAL_POSSIBLE_SIMULTANEOUS_INTERRUPTS]) -> usize {
     // SAFETY: stored state is restored below
-    let interrupt_state = unsafe { Arch::disable_interrupts() };
+    let interrupt_state = unsafe { TargetIRQArch::disable_interrupts() };
 
     // SAFETY: interrupts masked, so we
     // cant be interrupted mid op and get inconsistent state between
@@ -102,8 +104,8 @@ pub fn drain_pending_into_buf(buf: &mut [u32; TOTAL_POSSIBLE_SIMULTANEOUS_INTERR
         let count = (&raw const PENDING_COUNT).read_volatile();
         let base = (&raw const PENDING_INTERRUPTS).cast::<u32>();
 
-        for index in 0..count {
-            into[index] = base.add(index).read_volatile();
+        for (index, item) in buf.iter_mut().enumerate().take(count) {
+            *item = base.add(index).read_volatile();
         }
 
         (&raw mut PENDING_COUNT).write_volatile(0);
@@ -111,7 +113,7 @@ pub fn drain_pending_into_buf(buf: &mut [u32; TOTAL_POSSIBLE_SIMULTANEOUS_INTERR
     };
 
     // SAFETY: restoring the state saved above
-    unsafe { Arch::restore_interrupts(interrupt_state) };
+    unsafe { TargetIRQArch::restore_interrupts(interrupt_state) };
 
     count
 }

@@ -218,7 +218,7 @@ pub struct Interrupt {
     /// The unique ID of this interrupt on hardware.
     /// 
     /// This must be the *actual* interrupt id.
-    pub id: u64,
+    pub id: u32,
 
     /// The trigger type of the interrupt.
     /// 
