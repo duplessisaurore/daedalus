@@ -68,3 +68,50 @@ pub unsafe fn pending_any() -> bool {
     // be fine because we are only in one core env
     unsafe { (&raw const PENDING_COUNT).read_volatile() != 0 }
 }
+
+/// This drains the current elements
+/// of `PENDING_INTERRUPTS`, clearing the `PENDING_INTERRUPTS`
+/// and resetting `PENDING_COUNT` to 0.
+///
+/// This drains into the `buf` provided, and returns
+/// the number of entries drained.
+///
+/// This drain inherently copies, but should be cheap enough,
+/// the main reason we don't run directly on `PENDING` etc.
+/// is because we need to disable interrupts while draining,
+/// else mid-drain we can explode because of a race condition
+/// due to an interrupt handling mid-drain.
+///
+/// This inherently snapshots the state.
+///
+/// # Safety
+///
+/// This should only run on a non-interrupt "normal-context".
+///
+/// The main reason is that whoever runs this should actually
+/// be able to route the interrupts used back to the programs,
+/// which is only possible in the normal context!
+pub fn drain_pending_into_buf(buf: &mut [u32; TOTAL_POSSIBLE_SIMULTANEOUS_INTERRUPTS]) -> usize {
+    // SAFETY: stored state is restored below
+    let interrupt_state = unsafe { Arch::disable_interrupts() };
+
+    // SAFETY: interrupts masked, so we
+    // cant be interrupted mid op and get inconsistent state between
+    // `PENDING_COUNT` and `PENDING_INTERRUPTS` :)
+    let count = unsafe {
+        let count = (&raw const PENDING_COUNT).read_volatile();
+        let base = (&raw const PENDING_INTERRUPTS).cast::<u32>();
+
+        for index in 0..count {
+            into[index] = base.add(index).read_volatile();
+        }
+
+        (&raw mut PENDING_COUNT).write_volatile(0);
+        count
+    };
+
+    // SAFETY: restoring the state saved above
+    unsafe { Arch::restore_interrupts(interrupt_state) };
+
+    count
+}
