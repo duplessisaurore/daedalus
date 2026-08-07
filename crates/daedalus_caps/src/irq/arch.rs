@@ -11,7 +11,6 @@
 /// Nothing arch-specific should be at a "higher level" than this.
 pub trait IrqArch {
     /// This is the total number of interrupts this architecture
-    /// supports, each interrupt ID in this space will have a unique
-    /// bit associated with it.
+    /// supports, This is used to validate at the build process.s
     const INTERUPT_IDS: usize;
 }

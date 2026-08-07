@@ -48,6 +48,11 @@ pub struct Program<Image: StaticLeptonImage + 'static> {
     /// memory regions this program should have
     /// access to by default on creation
     pub grants: &'static [Grant],
+
+    /// The interrupts assigned to this process.
+    /// 
+    /// These are static assignments from the manifest
+    pub interrupts: &'static [Interrupt]
 }
 
 /// One Lepton3 daedalus phase
@@ -206,4 +211,28 @@ pub enum GrantLen {
 
     /// This grant extends to the end of DRAM
     ToEndOfMemory,
+}
+
+/// One interrupt that is assigned to this process.
+pub struct Interrupt {
+    /// The unique ID of this interrupt on hardware.
+    /// 
+    /// This must be the *actual* interrupt id.
+    pub id: u64,
+
+    /// The trigger type of the interrupt.
+    /// 
+    /// This determines how the interrupt is maintained active wise.
+    pub trigger: InterruptTrigger
+}
+
+/// The trigger type of an interrupt
+/// 
+/// This defines how its activated
+pub enum InterruptTrigger {
+    /// This signal is maintained until serviced by the user
+    Level,
+
+    /// This signal is a momentary pulse
+    Edge,
 }

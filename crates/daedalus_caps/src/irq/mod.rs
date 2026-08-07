@@ -23,12 +23,6 @@ pub struct IrqBinding {
     pub irq_handle: IrqHandle,
 }
 
-/// The pending map, this is how we tell
-/// in the normal context what irqs have been
-/// fired from the IRQ context to signal the
-/// correct processes with
-pub mod pending;
-
 /// Generic abstraction layer trait
 /// for architecture specific elements
 ///

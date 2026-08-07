@@ -23,6 +23,10 @@ struct Manifest {
     /// All of the grants (region definitions) for this program
     #[serde(default)]
     grants: Vec<GrantSpec>,
+
+    /// All of the interrupts (irq defs) for this program
+    #[serde(default)]
+    interrupts: Vec<InterruptSpec>
 }
 
 /// The parsed content of a Daedalus
@@ -123,6 +127,26 @@ pub enum GrantLenSpec {
 pub enum GrantLenKeyword {
     ToStartDaedalus,
     ToEndOfMemory,
+}
+
+/// One specification of an `Interrupt`
+/// in the manifest.
+///
+/// See `Interrupt`
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct InterruptSpec {
+    id: u64,
+    trigger: InterruptTrigger
+}
+
+
+/// Keyworded interrupt trigger types
+#[derive(Debug, Deserialize, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+pub enum InterruptTrigger {
+    Level,
+    Edge,
 }
 
 /// Converts the name to it's Image struct name
@@ -404,6 +428,11 @@ fn main() {
     // The seen set of names, a duplicate program name is not permitted
     let mut seen = HashSet::new();
 
+    // All of the seen interrupt ids
+    // this is for tracking to build the total set of interrupt ids
+    // for the interrupt pending tracker
+    let mut total_interrupts = HashSet::new();
+
     // This is the buf for the static image structs
     let mut image_structs_out = String::new();
 
@@ -517,15 +546,52 @@ fn main() {
         }
         grants_table_literal.push(']');
 
+        // Build the interrupts table for this program from it's manifest.
+        let mut interrupts_table_literal = String::from("[");
+        let mut seen_interrupts = HashSet::new();
+        for interrupt in &manifest.interrupts {
+
+            if seen_interrupts.contains(&interrupt.id) {
+            panic!(
+                "\x1b[93mprogram `{}`: contains duplicate interrupts of id {}, this is not permitted\x1b[0m",
+                manifest.name,
+                interrupt.id,
+            )
+            }
+            seen_interrupts.insert(&interrupt.id);
+
+            // Expression for the Interrupt Level
+            let trigger_expr = match interrupt.trigger {
+                InterruptTrigger::Edge => "InterruptTrigger::Edge",
+                InterruptTrigger::Level => "InterruptTrigger::Level",
+            };
+
+            // Track this as part of total interrupts to get the total
+            // possible at once out at the end.
+            total_interrupts.insert(interrupt.id);
+
+            writeln!(
+                interrupts_table_literal,
+                "Interrupt {{ 
+                    id: {:?}, 
+                    trugger: {trigger_expr}, 
+                }},",
+                interrupt.id,
+            )
+            .unwrap();
+        }
+        interrupts_table_literal.push(']');
+
         // Update the output with our included program
         writeln!(
             output,
             "static {program_name}: &'static Program<StaticDaedalusImageVariants> = &Program {{
         name: {:?},
         image: &StaticDaedalusImageVariants::{struct_name}(&{}),
-        grants: &{}
+        grants: &{},
+        interrupts: &{}
         }};",
-            manifest.name, image_literal, grants_table_literal
+            manifest.name, image_literal, grants_table_literal, interrupts_table_literal
         )
         .unwrap();
     }
@@ -739,8 +805,18 @@ fn main() {
 
     // Write the entry out as a reference to the phases
     output.push_str(&format!(
-        "pub const fn get_entry_phase() -> &'static Phase<StaticDaedalusImageVariants> {{ get_phase({:?}).unwrap() }}",
+        "
+        pub const fn get_entry_phase() -> &'static Phase<StaticDaedalusImageVariants> {{ get_phase({:?}).unwrap() }}
+        ",
         template.entry
+    ));
+
+    // Write the total number of 
+    output.push_str(&format!(
+        "
+        pub const TOTAL_POSSIBLE_SIMULTANEOUS_INTERRUPTS: u64 = {};
+        ",
+        total_interrupts.len()
     ));
 
     fs::write(&out_file, output).unwrap();
