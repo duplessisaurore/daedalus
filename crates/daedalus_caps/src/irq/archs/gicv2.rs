@@ -5,7 +5,7 @@
 use crate::irq::arch::IrqArch;
 
 /// First valid interrupt ID
-/// 
+///
 /// 0-15 are software.
 const FIRST_DEVICE_INTERRUPT_ID: u32 = 16;
 

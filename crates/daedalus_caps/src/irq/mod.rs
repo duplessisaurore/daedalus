@@ -1,6 +1,6 @@
 //! This module holds all of the irq
 //! handling and creation caps across platforms
-//! 
+//!
 //! this module assumes only single core daedalus
 
 use lepton3::lepton_vm::values::Tag;
@@ -11,7 +11,7 @@ use lepton3::lepton_vm::values::Tag;
 pub struct IrqHandle(pub Tag);
 
 /// A registrated binding of an IRQ to a program.
-/// 
+///
 /// This should be referred to by some `IRQ` int id.
 #[derive(Clone, Copy, Debug)]
 pub struct IrqBinding {
@@ -22,6 +22,12 @@ pub struct IrqBinding {
     /// binding in the program's space.
     pub irq_handle: IrqHandle,
 }
+
+/// The pending map, this is how we tell
+/// in the normal context what irqs have been
+/// fired from the IRQ context to signal the
+/// correct processes with
+pub mod pending;
 
 /// Generic abstraction layer trait
 /// for architecture specific elements

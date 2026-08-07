@@ -1,6 +1,6 @@
 //! All implemented architectures lie in this
 //! submodule for IRQ ops
-//! 
+//!
 //! This module exports based on the target_arch and
 //! sometimes the controller the IRQ ops.
 
@@ -26,7 +26,7 @@ const fn validate_irqs_for_current_irq_arch() {
 
         // Make sure the interrupt is valid for our target irq arch
         if !TargetIRQArch::is_valid_irq(id) {
-            let _ = ["IRQ id not supported by the selected interrupt arch"; 0][id as usize];  // INVALID IRQ (see above as index is <invalid_irq_num>)
+            let _ = ["IRQ id not supported by the selected interrupt arch"; 0][id as usize]; // INVALID IRQ (see above as index is <invalid_irq_num>)
         }
         i += 1;
     }

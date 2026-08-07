@@ -1,6 +1,6 @@
 //! All implemented architectures lie in this
 //! submodule for memory ops
-//! 
+//!
 //! This module exports based on the target_arch
 //! the memory ops.
 
