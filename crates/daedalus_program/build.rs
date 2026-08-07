@@ -136,7 +136,7 @@ pub enum GrantLenKeyword {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct InterruptSpec {
-    id: u64,
+    id: u32,
     trigger: InterruptTrigger
 }
 
@@ -574,7 +574,7 @@ fn main() {
                 interrupts_table_literal,
                 "Interrupt {{ 
                     id: {:?}, 
-                    trugger: {trigger_expr}, 
+                    trigger: {trigger_expr}, 
                 }},",
                 interrupt.id,
             )
@@ -811,12 +811,17 @@ fn main() {
         template.entry
     ));
 
-    // Write the total number of 
+    // Write the total number of interrupts and
+    // a "simple set" for compile time validation.
     output.push_str(&format!(
         "
-        pub const TOTAL_POSSIBLE_SIMULTANEOUS_INTERRUPTS: u64 = {};
+        pub const TOTAL_POSSIBLE_SIMULTANEOUS_INTERRUPTS: usize = {};
+
+        pub const INTERRUPT_ARRAY: [u32; {}] = {:?};
         ",
-        total_interrupts.len()
+        total_interrupts.len(),
+        total_interrupts.len(),
+        total_interrupts.iter().collect::<Vec<_>>()
     ));
 
     fs::write(&out_file, output).unwrap();

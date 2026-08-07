@@ -9,8 +9,15 @@
 /// IRQ operations that `Daedalus` provides an abstracted view over.
 /// 
 /// Nothing arch-specific should be at a "higher level" than this.
+/// 
+/// This type that impls the trait must have a const fn is_valid_irq 
+/// that takes a u32 and outputs a bool determining if the IRQ is valid.
 pub trait IrqArch {
-    /// This is the total number of interrupts this architecture
-    /// supports, This is used to validate at the build process.s
-    const INTERUPT_IDS: usize;
+    /// This must exist (no const_trait_impl plz)
+    /// pub const fn is_valid_irq(id: u32) -> bool { ... }
+    /// but on the type.
+    ///
+    /// This function should call the const function. (it is not used,
+    /// but a reminder).
+    fn is_valid_irq(id: u32) -> bool;
 }
