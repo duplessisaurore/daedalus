@@ -19,9 +19,7 @@ use lepton3::{
 };
 
 use crate::{
-    errors::DaedalusCapErrors,
-    ipc::migrate::migrate,
-    memory::{MintedGrantRegions, Region, RegionHandle, mint_grants},
+    errors::DaedalusCapErrors, ipc::migrate::migrate, irq::IrqBinding, memory::{MintedGrantRegions, Region, RegionHandle, mint_grants},
 };
 
 /// A unique program's call reply association
@@ -383,6 +381,15 @@ pub struct DaedalusState<I: StaticLeptonImage + 'static, H: HeapAllocator, T: Ta
     /// can call other programs
     pub current_program: &'static str,
 
+    /// The total IRQ registrations by interrupt ID.
+    /// 
+    /// These are global, not per-program.
+    /// 
+    /// An interrupt service routine must never touch this,
+    /// and it must only be touched in normal-context to
+    /// weird corruption due to map ops being interrupted.
+    pub irqs: HashMap<u32, IrqBinding>,
+
     /// Pending replies for the current phase being executed
     ///
     /// This is a map of the tag allocated for this call back to the
@@ -435,6 +442,7 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Daedalus
         Ok(Self {
             current_program: current_phase.program.name,
             current_phase,
+            irqs: HashMap::new(),
             programs: HashMap::new(),
             ready_queue: VecDeque::new(),
             pending_replies: HashMap::new(),

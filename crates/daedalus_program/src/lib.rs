@@ -213,6 +213,23 @@ pub enum GrantLen {
     ToEndOfMemory,
 }
 
+/// This is the priority level of an interrupt
+/// 
+/// This is a normalised scale from 
+/// 
+/// 0 - Most urgent
+/// 255 - Least urgent
+/// 
+/// The specific interrupt arch should map this
+/// to their own corresponding priority system.
+/// 
+/// The granularity may also not be portable (as
+/// in there may not be 255 uniq levels), in that
+/// case simply chunk the normalised priority into
+/// the actual number of priority levels.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub struct InterruptPriority(pub u8);
+
 /// One interrupt that is assigned to this process.
 pub struct Interrupt {
     /// The unique ID of this interrupt on hardware.
@@ -223,7 +240,12 @@ pub struct Interrupt {
     /// The trigger type of the interrupt.
     /// 
     /// This determines how the interrupt is maintained active wise.
-    pub trigger: InterruptTrigger
+    pub trigger: InterruptTrigger,
+
+   /// How urgent this interrupt is relative to others.
+   /// 
+   /// See `InterruptPriority`
+    pub priority: InterruptPriority,
 }
 
 /// The trigger type of an interrupt

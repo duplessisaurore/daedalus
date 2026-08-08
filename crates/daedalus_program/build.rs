@@ -137,9 +137,40 @@ pub enum GrantLenKeyword {
 #[serde(deny_unknown_fields)]
 struct InterruptSpec {
     id: u32,
-    trigger: InterruptTrigger
+    trigger: InterruptTrigger,
+
+    #[serde(default)]
+    priority: InterruptPrioritySpec,
 }
 
+
+/// See `InterruptPriority`
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum InterruptPrioritySpec {
+    Priority(u8),
+    Keyword(InterruptPriorityKeyword),
+}
+
+/// Keyworded-InterruptPriority's
+#[derive(Debug, Deserialize, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+pub enum InterruptPriorityKeyword {
+    /// 0
+    Highest,
+
+    /// 64
+    High,
+
+    /// 128
+    Normal,
+
+    /// 192
+    Low,
+
+    /// 255
+    Lowest
+}
 
 /// Keyworded interrupt trigger types
 #[derive(Debug, Deserialize, Clone, Copy)]
@@ -566,6 +597,12 @@ fn main() {
                 InterruptTrigger::Level => "InterruptTrigger::Level",
             };
 
+            // Expression for the Interrupt priority
+            let priority_expr = match interrupt.priority {
+                InterruptPrioritySpec::Priority(level) => format!("InterruptPriority({})", level),
+                InterruptPrioritySpec::Keyword(kwrd) => kwrd.map_to_priority_level().to_string(),
+            };
+        
             // Track this as part of total interrupts to get the total
             // possible at once out at the end.
             total_interrupts.insert(interrupt.id);
@@ -574,7 +611,8 @@ fn main() {
                 interrupts_table_literal,
                 "Interrupt {{ 
                     id: {:?}, 
-                    trigger: {trigger_expr}, 
+                    trigger: {trigger_expr},
+                    priority: {priority_expr}
                 }},",
                 interrupt.id,
             )
@@ -825,4 +863,28 @@ fn main() {
     ));
 
     fs::write(&out_file, output).unwrap();
+}
+
+
+impl InterruptPriorityKeyword {
+    /// Maps a priovided `InterruptPriorityKeyword` into
+    /// a stringified version of an `InterruptPriority` that
+    /// initialises the interrupt priority of this level.
+    /// 
+    /// E.g Highest => InterruptPriority(0);
+    pub const fn map_to_priority_level(&self) -> &'static str {
+        match self {
+            InterruptPriorityKeyword::Highest => "InterruptPriority(0)",
+            InterruptPriorityKeyword::High => "InterruptPriority(64)",
+            InterruptPriorityKeyword::Normal => "InterruptPriority(128)",
+            InterruptPriorityKeyword::Low => "InterruptPriority(192)",
+            InterruptPriorityKeyword::Lowest => "InterruptPriority(255)",
+        }
+    }
+}
+
+impl Default for InterruptPrioritySpec {
+    fn default() -> Self {
+        Self::Keyword(InterruptPriorityKeyword::Normal)
+    }
 }
