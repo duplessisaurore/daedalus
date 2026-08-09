@@ -251,6 +251,7 @@ pub struct Interrupt {
 /// The trigger type of an interrupt
 /// 
 /// This defines how its activated
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum InterruptTrigger {
     /// This signal is maintained until serviced by the user
     Level,

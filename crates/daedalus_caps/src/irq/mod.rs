@@ -36,6 +36,10 @@ pub mod pending;
 /// all the `Daedalus` IRQ ops.
 pub mod arch;
 
+/// Platform specific details that maybe required
+/// by an `IrqArch`.
+pub mod plats;
+
 /// The specific architecture that we
 /// are using for this build for IRQ
 pub mod archs;

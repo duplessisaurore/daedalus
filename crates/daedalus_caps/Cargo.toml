@@ -19,4 +19,11 @@ lepton3 = { workspace = true }
 daedalus_program = { workspace = true }
 
 [features]
+# irq archs
 gicv2 = []
+
+# platforms
+
+# Xilinx
+zynqmp = ["gicv2"]
+zcu106 = ["zynqmp"]
