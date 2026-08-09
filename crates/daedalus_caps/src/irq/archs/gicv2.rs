@@ -265,8 +265,20 @@ impl GICDRegisters {
     ///
     /// the GIC must be like actually there lol
     pub unsafe fn read(&self) -> u32 {
-        unsafe { core::ptr::read_volatile((GIC_DISTRIBUTOR_BASE + self.to_offset()) as *const u32) }
+        unsafe { 
+            Self::read_with_offset(&self, 0)
+         }
     }
+
+    /// Read this distributer register with some offset
+    ///
+    /// # Safety
+    ///
+    /// the GIC must be like actually there lol
+    unsafe fn read_with_offset(&self, offset: usize) -> u32 {
+        unsafe { core::ptr::read_volatile((GIC_DISTRIBUTOR_BASE + self.to_offset() + offset) as *const u32) }
+    }
+
 
     /// Write to this distributer register
     ///
@@ -275,9 +287,69 @@ impl GICDRegisters {
     /// the GIC must be like actually there lol
     pub unsafe fn write(&self, value: u32) {
         unsafe {
-            core::ptr::write_volatile((GIC_DISTRIBUTOR_BASE + self.to_offset()) as *mut u32, value)
+            Self::write_with_offset(&self, 0, value);
         }
     }
+
+    /// Write to this distributer register with some offset
+    ///
+    /// # Safety
+    ///
+    /// the GIC must be like actually there lol
+    unsafe fn write_with_offset(&self, offset: usize, value: u32) {
+        unsafe {
+            core::ptr::write_volatile((GIC_DISTRIBUTOR_BASE + self.to_offset() + offset) as *mut u32, value)
+        }
+    }
+
+    /// This essentailly writes a byte to a byte-per-interrupt
+    /// GICD register.
+    /// 
+    /// To do this we need to read out the register's value (so
+    /// we can use the consistent form of `GICDRegisters:;read`), update 
+    /// the byte, write it back out (also consistently using `GICDRegisters::write`).
+    /// 
+    /// I do think GICv2 lets you do byte accesses but eh what the hell.
+    /// 
+    /// This nukes whatever value was in the byte !!!
+    /// 
+    /// # Safety
+    /// 
+    /// The gic must be like actually there and mapped in.
+    /// 
+    /// The register we are writing to must be an actual byte-per-interrupt
+    /// GICD register.
+    pub unsafe fn write_interrupt_byte_register(&self, interrupt_id: u32, byte_value: u8) {
+        // round down index to nearest 4
+        // since we grab a 32 bit chunk at once (4 interrupt ids)
+        let index = (interrupt_id & !0x3) as usize;
+
+        // this is the shift to the specific byte in the register
+        // that this interrupt id corresponds to
+        let shift = (interrupt_id & 0x3) * 8;
+
+        // Read the full chunk
+        // 
+        // # Safety
+        // 
+        // precondition preserved by safety header of this function.
+        let mut chunk = unsafe { self.read_with_offset(index) };
+        
+        // Clear out the existing byte in the chunk
+        chunk &= !(0xFF << shift);
+
+        // Put the new value byte
+        chunk |= u32::from(byte_value) << shift;
+
+        // Write back out
+        //
+        // # Safety
+        //
+        // precondition preserved by safety header of this function.
+        unsafe {
+            self.write_with_offset(index, chunk);
+        }
+    } 
 }
 
 impl GICTriggerMapping {
