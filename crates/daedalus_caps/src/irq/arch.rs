@@ -3,6 +3,8 @@
 //! to inherently implement the IRQ operations
 //! on that architecture.
 
+use daedalus_program::{InterruptPriority, InterruptTrigger};
+
 /// A single architecture's IRQ operations
 ///
 /// This supplies the boundary between arch-generic and arch-specific
@@ -17,6 +19,87 @@ pub trait IrqArch {
     /// interrupt state saved from `disable_interrupts`
     /// which can be restored to with `restore_interrupts`
     type InterruptState;
+
+    /// Set up the interrupts on this architecture
+    /// 
+    /// An example of some things that maybe required:
+    ///     - Setting up the exception vector table.
+    ///     - Configuring the interrupt controller
+    /// 
+    /// # Safety
+    /// 
+    /// Must be ran only exactly once during boot before
+    /// any interrupt is registered by any `Daedalus` programs.
+    /// 
+    /// (there must be no proceeding `IrqArch` operations).
+    /// 
+    /// Must run after .bss is initialised/zerod (the pending tracker
+    /// lives there)
+    /// 
+    /// The caller must ensure that `Daedalus` only ever runs on one core at
+    /// once.
+    unsafe fn setup();
+
+    /// Teardown all of the interrupt system that was modified
+    /// throughout the running of `Daedalus`.
+    /// 
+    /// This should generally do the inverse of any setup that was required,
+    /// such that we tore down anything `Daedalus` setup so that we can hand off
+    /// to the OS/kernel plainly.
+    /// 
+    /// # Safety
+    /// 
+    /// Must be ran only once, right before hand off.
+    /// 
+    /// There must be no following `IrqArch` operations.
+    ///
+    /// The caller must ensure that `Daedalus` only ever runs on one core at
+    /// once.
+    unsafe fn teardown();
+
+    /// Configure an interrupt.
+    /// 
+    /// This should update the interrupt's trigger mode
+    /// to the provided `trigger`, and update the priority
+    /// to the specified `priority` level :3c
+    /// 
+    /// This should also ensure that the interrupt is routed
+    /// to the CPU that `Daedalus` is on (if that exists on the
+    /// arch).
+    /// 
+    /// # Safety
+    /// 
+    /// It is assumed that `id` must satisfy this architecture's
+    /// `is_valid_irq` function. 
+    /// 
+    /// This is also assumed to run bfore `unmask` for this interrupt
+    /// to ensure that it doesn't get fired with a garbage priority/etc.
+    /// 
+    /// This must be run after `setup` is called.
+    unsafe fn configure(interrupt_id: u32, trigger: InterruptTrigger, priority: InterruptPriority);
+
+    /// Prevent an interrupt from reaching `Daedalus`
+    /// 
+    /// # Safety
+    /// 
+    /// It is assumed that `id` must satisfy this architecture's
+    /// `is_valid_irq` function. 
+    /// 
+    /// This must be run after `setup` is called.
+    unsafe fn mask(interrupt_id: u32);
+
+    /// Allow an interrupt from reaching `Daedalus`
+    /// 
+    /// # Safety
+    /// 
+    /// It is assumed that `id` must satisfy this architecture's
+    /// `is_valid_irq` function. 
+    /// 
+    /// This must be run after `setup` is called.
+    /// 
+    /// The caller should make sure the device's condition has
+    /// been cleared first, else it will just refire...
+    unsafe fn unmask(interrupt_id: u32);
 
     /// This must exist (no const_trait_impl plz)
     /// pub const fn is_valid_irq(id: u32) -> bool { ... }
@@ -78,4 +161,6 @@ pub trait IrqArch {
     /// This assumes that the caller will properly have passed
     /// the `InterruptState` produced from a `disable_interrupts`.
     unsafe fn restore_interrupts(state: Self::InterruptState);
+
+    
 }
