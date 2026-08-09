@@ -2,7 +2,7 @@
 //! for `aarch64`, specifically `GICv2` as the interrupt
 //! controller.
 
-use daedalus_program::InterruptTrigger;
+use daedalus_program::{InterruptPriority, InterruptTrigger};
 
 use crate::irq::{
     arch::IrqArch,
@@ -36,6 +36,10 @@ const PMR_PRIORITY_MASK: u32 = 0xFF;
 /// This means our bootloader should be running on core zero,
 /// which is targetted by setting ITARGETSR bit 0x01.
 const TARGET_CPU0: u8 = 0x01;
+
+/// The field to read from GICD_TYPER to read
+/// out the number of interrupt lines
+const GICD_TYPER_ITLINESNUMBER_MASK: u32 = 0x1F;
 
 // Distributer registers
 pub enum GICDRegisters {
@@ -142,6 +146,10 @@ pub enum GICTriggerMapping {
     Edge,
 }
 
+/// Mapping from `InterruptPriority` onto GICv2 Prior levels.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct GICInterruptPriority(u8);
+
 /// The `GICv2` memory operations
 ///
 /// These are for `ARM 64-bit` platforms
@@ -208,13 +216,15 @@ impl GICCRegisters {
     /// # Safety
     ///
     /// the GIC must be like actually there lol
-    /// 
+    ///
     /// Whenever the `IAR` register is read, this can cause
     /// a side effect, which actively acknowledges the interrupt and
     /// moves it into the `active` state (the cpu is assumed to be
     /// "dealing with it").
     pub unsafe fn read(&self) -> u32 {
-        unsafe { core::ptr::read_volatile((GIC_CPU_INTERFACE_BASE + self.to_offset()) as *const u32) }
+        unsafe {
+            core::ptr::read_volatile((GIC_CPU_INTERFACE_BASE + self.to_offset()) as *const u32)
+        }
     }
 
     /// Write to this CPU interface register
@@ -224,7 +234,10 @@ impl GICCRegisters {
     /// the GIC must be like actually there lol
     pub unsafe fn write(&self, value: u32) {
         unsafe {
-            core::ptr::write_volatile((GIC_CPU_INTERFACE_BASE + self.to_offset()) as *mut u32, value)
+            core::ptr::write_volatile(
+                (GIC_CPU_INTERFACE_BASE + self.to_offset()) as *mut u32,
+                value,
+            )
         }
     }
 }
@@ -285,4 +298,37 @@ impl From<InterruptTrigger> for GICTriggerMapping {
             InterruptTrigger::Edge => Self::Edge,
         }
     }
+}
+
+impl From<InterruptPriority> for GICInterruptPriority {
+    fn from(value: InterruptPriority) -> Self {
+        // Map the priority down.
+        //
+        // The direction is the same here (0 is higher prio)
+        // but a newtype makes sure we use the correct priority
+        // and not some other IRQArchs
+        //
+        // The GICv2 automatically "compresses" it down into
+        // the actual hardware levels too so not much we have to do here.
+        GICInterruptPriority(value.0)
+    }
+}
+
+/// How many interrupt lines this distributor actually implements
+/// on the platform.
+///
+/// This returns the max number of SPI interrupt ids
+/// (shared peripheral interrupts) as the 32 * (value from the field + 1)
+///
+/// We clamp the number of lines to FIRST_SPECIAL_INTERRUPT_ID to avoid
+/// accidentally obliterating those oopsies ><
+///
+/// # Safety
+///
+/// The GIC must actually exist lol.
+unsafe fn line_count() -> u32 {
+    // # Safety
+    // Safety precondition is preserved by header
+    let it_lines = unsafe { GICDRegisters::TYPER.read() } & GICD_TYPER_ITLINESNUMBER_MASK;
+    ((it_lines + 1) * 32).min(FIRST_SPECIAL_INTERRUPT_ID)
 }
