@@ -2,6 +2,8 @@
 //! for `aarch64`, specifically `GICv2` as the interrupt
 //! controller.
 
+use daedalus_program::InterruptTrigger;
+
 use crate::irq::{
     arch::IrqArch,
     plats::{GIC_CPU_INTERFACE_BASE, GIC_DISTRIBUTOR_BASE},
@@ -21,6 +23,19 @@ const FIRST_SPECIAL_INTERRUPT_ID: u32 = 1020;
 /// Below this is private peripheral interrupts,
 /// which are per-core/CPU.
 const FIRST_SHARED_INTERRUPT_ID: u32 = 32;
+
+/// The initial PMR priority mask value.
+///
+/// The PMR registser disallows anything below its set value
+/// of priority, which is initialised initially to 0 (so everything
+/// explodes!) we set it to 0xFF to permit everything
+const PMR_PRIORITY_MASK: u32 = 0xFF;
+
+/// We assume a single-core environment
+///
+/// This means our bootloader should be running on core zero,
+/// which is targetted by setting ITARGETSR bit 0x01.
+const TARGET_CPU0: u8 = 0x01;
 
 // Distributer registers
 pub enum GICDRegisters {
@@ -121,6 +136,12 @@ pub enum GICCRegisters {
     EOIR,
 }
 
+/// Mapping from `InterruptTrigger` onto GICTrigger levels.
+pub enum GICTriggerMapping {
+    Level,
+    Edge,
+}
+
 /// The `GICv2` memory operations
 ///
 /// These are for `ARM 64-bit` platforms
@@ -181,6 +202,31 @@ impl GICCRegisters {
             GICCRegisters::EOIR => 0x10,
         }
     }
+
+    /// Read this CPU interface register
+    ///
+    /// # Safety
+    ///
+    /// the GIC must be like actually there lol
+    /// 
+    /// Whenever the `IAR` register is read, this can cause
+    /// a side effect, which actively acknowledges the interrupt and
+    /// moves it into the `active` state (the cpu is assumed to be
+    /// "dealing with it").
+    pub unsafe fn read(&self) -> u32 {
+        unsafe { core::ptr::read_volatile((GIC_CPU_INTERFACE_BASE + self.to_offset()) as *const u32) }
+    }
+
+    /// Write to this CPU interface register
+    ///
+    /// # Safety
+    ///
+    /// the GIC must be like actually there lol
+    pub unsafe fn write(&self, value: u32) {
+        unsafe {
+            core::ptr::write_volatile((GIC_CPU_INTERFACE_BASE + self.to_offset()) as *mut u32, value)
+        }
+    }
 }
 
 impl GICDRegisters {
@@ -197,6 +243,46 @@ impl GICDRegisters {
             GICDRegisters::IPRIORITYR => 0x400,
             GICDRegisters::ITARGETSR => 0x800,
             GICDRegisters::ICFGR => 0xC00,
+        }
+    }
+
+    /// Read this distributer register
+    ///
+    /// # Safety
+    ///
+    /// the GIC must be like actually there lol
+    pub unsafe fn read(&self) -> u32 {
+        unsafe { core::ptr::read_volatile((GIC_DISTRIBUTOR_BASE + self.to_offset()) as *const u32) }
+    }
+
+    /// Write to this distributer register
+    ///
+    /// # Safety
+    ///
+    /// the GIC must be like actually there lol
+    pub unsafe fn write(&self, value: u32) {
+        unsafe {
+            core::ptr::write_volatile((GIC_DISTRIBUTOR_BASE + self.to_offset()) as *mut u32, value)
+        }
+    }
+}
+
+impl GICTriggerMapping {
+    /// Converts this value to the ICFGR bit value for
+    /// this trigger
+    pub const fn to_bit_value(&self) -> u32 {
+        match self {
+            GICTriggerMapping::Level => 0b00,
+            GICTriggerMapping::Edge => 0b10,
+        }
+    }
+}
+
+impl From<InterruptTrigger> for GICTriggerMapping {
+    fn from(value: InterruptTrigger) -> Self {
+        match value {
+            InterruptTrigger::Level => Self::Level,
+            InterruptTrigger::Edge => Self::Edge,
         }
     }
 }
