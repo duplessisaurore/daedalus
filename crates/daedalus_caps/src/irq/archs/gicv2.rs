@@ -349,6 +349,28 @@ impl GICDRegisters {
         unsafe {
             self.write_with_offset(index, chunk);
         }
+    }
+
+    /// This essentailly writes a bit to a bit-per-interrupt
+    /// GICD register.
+    /// 
+    /// These are just a write 1 to set register, so we only
+    /// need to write the corresponding bit at the interrupt ID.
+    ///
+    /// # Safety
+    /// 
+    /// The gic must be like actually there and mapped in.
+    /// 
+    /// The register we are writing to must be an actual bit-per-interrupt
+    /// GICD register.
+    unsafe fn write_interrupt_bit(&self, interrupt_id: u32) {
+        unsafe {
+            // Get the index and bit for this specific interrupt id
+            let index = ((interrupt_id & !0x1F) as usize) >> 3;
+            let bit = 1u32 << (interrupt_id & 0x1F);
+
+            self.write_with_offset(index, bit);
+        }
     } 
 }
 
