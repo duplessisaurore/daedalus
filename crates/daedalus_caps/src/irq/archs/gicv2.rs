@@ -27,8 +27,8 @@ const FIRST_SHARED_INTERRUPT_ID: u32 = 32;
 /// The initial PMR priority mask value.
 ///
 /// The PMR registser disallows anything below its set value
-/// of priority (with 0 being "highest" and 255 being "lowest"), 
-/// which is initialised initially to 0 (so everything explodes!) 
+/// of priority (with 0 being "highest" and 255 being "lowest"),
+/// which is initialised initially to 0 (so everything explodes!)
 /// we set it to 0xFF to permit everything
 const PMR_PRIORITY_MASK: u32 = 0xFF;
 
@@ -188,19 +188,60 @@ impl IrqArch for GICv2 {
             core::arch::asm!("msr daif, {}", in(reg) state.0, options(nomem, nostack));
         }
     }
-    
+
     unsafe fn setup() {
         todo!()
     }
-    
+
     unsafe fn teardown() {
         todo!()
     }
-    
+
     unsafe fn configure(interrupt_id: u32, trigger: InterruptTrigger, priority: InterruptPriority) {
-        
+        // Write the trigger mode out for this interrupt
+        //
+        // # Safety
+        //
+        // The gic must be setup because this function
+        // requires that `setup` has ran first.
+        //
+        // ICFGR is a two-bit-per-interrupt register.
+        unsafe {
+            GICDRegisters::ICFGR.write_interrupt_two_bit_register(
+                interrupt_id,
+                GICTriggerMapping::from(trigger).to_bit_value(),
+            );
+        }
+
+        // Write the priority out for this interrupt.
+        //
+        // # Safety
+        //
+        // The gic must be setup because this function
+        // requires that `setup` has ran first.
+        //
+        // IPRIORITYR is a byte-per-interrupt register.
+        unsafe {
+            GICDRegisters::IPRIORITYR.write_interrupt_byte_register(
+                interrupt_id,
+                GICInterruptPriority::from(priority).0,
+            );
+        }
+
+        // Write the target out for this interrupt, so
+        // it targets our cpu.
+        //
+        // # Safety
+        //
+        // The gic must be setup because this function
+        // requires that `setup` has ran first.
+        //
+        // ITARGETSR is a byte-per-interrupt register.
+        unsafe {
+            GICDRegisters::ITARGETSR.write_interrupt_byte_register(interrupt_id, TARGET_CPU0);
+        }
     }
-    
+
     unsafe fn mask(interrupt_id: u32) {
         // # Safety
         //
@@ -213,7 +254,7 @@ impl IrqArch for GICv2 {
             GICDRegisters::ICENABLER.write_interrupt_bit(interrupt_id);
         }
     }
-    
+
     unsafe fn unmask(interrupt_id: u32) {
         // # Safety
         //
@@ -304,9 +345,7 @@ impl GICDRegisters {
     ///
     /// the GIC must be like actually there lol
     pub unsafe fn read(&self) -> u32 {
-        unsafe { 
-            self.read_with_offset(0)
-         }
+        unsafe { self.read_with_offset(0) }
     }
 
     /// Read this distributer register with some offset
@@ -315,9 +354,12 @@ impl GICDRegisters {
     ///
     /// the GIC must be like actually there lol
     unsafe fn read_with_offset(&self, offset: usize) -> u32 {
-        unsafe { core::ptr::read_volatile((GIC_DISTRIBUTOR_BASE + self.to_offset() + offset) as *const u32) }
+        unsafe {
+            core::ptr::read_volatile(
+                (GIC_DISTRIBUTOR_BASE + self.to_offset() + offset) as *const u32,
+            )
+        }
     }
-
 
     /// Write to this distributer register
     ///
@@ -337,25 +379,28 @@ impl GICDRegisters {
     /// the GIC must be like actually there lol
     unsafe fn write_with_offset(&self, offset: usize, value: u32) {
         unsafe {
-            core::ptr::write_volatile((GIC_DISTRIBUTOR_BASE + self.to_offset() + offset) as *mut u32, value)
+            core::ptr::write_volatile(
+                (GIC_DISTRIBUTOR_BASE + self.to_offset() + offset) as *mut u32,
+                value,
+            )
         }
     }
 
     /// This essentailly writes a byte to a byte-per-interrupt
     /// GICD register.
-    /// 
+    ///
     /// To do this we need to read out the register's value (so
-    /// we can use the consistent form of `GICDRegisters:;read`), update 
+    /// we can use the consistent form of `GICDRegisters:;read`), update
     /// the byte, write it back out (also consistently using `GICDRegisters::write`).
-    /// 
+    ///
     /// I do think GICv2 lets you do byte accesses but eh what the hell.
-    /// 
+    ///
     /// This nukes whatever value was in the byte !!!
-    /// 
+    ///
     /// # Safety
-    /// 
+    ///
     /// The gic must be like actually there and mapped in.
-    /// 
+    ///
     /// The register we are writing to must be an actual byte-per-interrupt
     /// GICD register.
     pub unsafe fn write_interrupt_byte_register(&self, interrupt_id: u32, byte_value: u8) {
@@ -368,12 +413,12 @@ impl GICDRegisters {
         let shift = (interrupt_id & 0x3) * 8;
 
         // Read the full chunk
-        // 
+        //
         // # Safety
-        // 
+        //
         // precondition preserved by safety header of this function.
         let mut chunk = unsafe { self.read_with_offset(index) };
-        
+
         // Clear out the existing byte in the chunk
         chunk &= !(0xFF << shift);
 
@@ -392,14 +437,14 @@ impl GICDRegisters {
 
     /// This essentailly writes a bit to a bit-per-interrupt
     /// GICD register.
-    /// 
+    ///
     /// These are just a write 1 to set register, so we only
     /// need to write the corresponding bit at the interrupt ID.
     ///
     /// # Safety
-    /// 
+    ///
     /// The gic must be like actually there and mapped in.
-    /// 
+    ///
     /// The register we are writing to must be an actual bit-per-interrupt
     /// GICD register.
     unsafe fn write_interrupt_bit(&self, interrupt_id: u32) {
@@ -410,7 +455,7 @@ impl GICDRegisters {
 
             self.write_with_offset(index, bit);
         }
-    } 
+    }
 
     /// This essentailly writes a two-bit field to a two-bits-per-interrupt
     /// GICD register.
@@ -429,23 +474,23 @@ impl GICDRegisters {
     unsafe fn write_interrupt_two_bit_register(&self, interrupt_id: u32, two_bit_value: u8) {
         // 16 interrupts per 32-bit register.
         let index = ((interrupt_id & !0xF) as usize) >> 2;
- 
+
         // Two bits, this is the shift to our specific interrupt
         let shift = (interrupt_id & 0xF) * 2;
- 
+
         // Read the full chunk
         //
         // # Safety
         //
         // precondition preserved by safety header of this function.
         let mut chunk = unsafe { self.read_with_offset(index) };
- 
+
         // Clear out the existing field in the chunk
         chunk &= !(0b11 << shift);
- 
+
         // Put the new field value in (ensure its only the first 2 bits)
         chunk |= u32::from(two_bit_value & 0b11) << shift;
- 
+
         // Write back out
         //
         // # Safety
@@ -455,13 +500,12 @@ impl GICDRegisters {
             self.write_with_offset(index, chunk);
         }
     }
-
 }
 
 impl GICTriggerMapping {
     /// Converts this value to the ICFGR bit value for
     /// this trigger
-    pub const fn to_bit_value(&self) -> u32 {
+    pub const fn to_bit_value(&self) -> u8 {
         match self {
             GICTriggerMapping::Level => 0b00,
             GICTriggerMapping::Edge => 0b10,
