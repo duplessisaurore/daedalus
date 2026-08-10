@@ -2,12 +2,23 @@
 //! for `aarch64`, specifically `GICv2` as the interrupt
 //! controller.
 
+use core::arch::global_asm;
+
 use daedalus_program::{InterruptPriority, InterruptTrigger};
 
 use crate::irq::{
     arch::IrqArch,
     plats::{GIC_CPU_INTERFACE_BASE, GIC_DISTRIBUTOR_BASE},
 };
+
+// This is the exception vector table we need to install
+// for irqs to work so aarch64 can jump into our rust on irqs
+global_asm!(include_str!("./gicv2_evt.S"));
+
+unsafe extern "C" {
+    // This label is defined in gicv2_evt.S
+    static daedalus_vectors: u8;
+}
 
 /// First valid interrupt ID
 ///
@@ -190,7 +201,17 @@ impl IrqArch for GICv2 {
     }
 
     unsafe fn setup() {
-        
+        // # Safety
+        // 
+        // This is called exactly once, so it doesn't really matter.
+        // 
+        // Theres no IRQ arch ops called before this.
+        // 
+        // Only ran on one core.
+        unsafe {
+            // setup the exception vector table so stuff can arrive at `Daedalus`
+            install_exception_vectors();
+        }
     }
 
     unsafe fn teardown() {
@@ -584,4 +605,43 @@ unsafe fn line_count() -> u32 {
     // Safety precondition is preserved by header
     let it_lines = unsafe { GICDRegisters::TYPER.read() } & GICD_TYPER_ITLINESNUMBER_MASK;
     ((it_lines + 1) * 32).min(FIRST_SPECIAL_INTERRUPT_ID)
+}
+
+/// Installs the exception vector table into `VBAR_EL1` (where
+/// da table should go nya~)
+/// 
+/// # Safety
+/// 
+/// This must be called only by setup once, before the GICC and GICD
+/// are enabled by CTLR
+unsafe fn install_exception_vectors() {
+    let base = (&raw const daedalus_vectors) as usize;
+
+    // SAFETY:
+    //
+    // We are dropped off at `el1`, and `VBAR_EL1` is writeable
+    // at EL1.
+    unsafe {
+        core::arch::asm!(
+            "msr vbar_el1, {base}",
+            "isb",
+            base = in(reg) base,
+            options(nomem, nostack, preserves_flags)
+        );
+    }
+}
+
+/// This is the interrupt service routine called by aarch64
+/// on an interrupt from the vector table setup by `install_exception_vectors`.
+/// 
+/// This must be allocation free.
+#[unsafe(no_mangle)]
+pub extern "C" fn daedalus_irq_handler() {
+}
+
+/// This is called for any other exception which isnt the `daedalus_irq_handler`
+/// 
+/// These are all like unexpected and explode. (do not eret or i will kill  you  (to myself wuehehe :3))
+#[unsafe(no_mangle)]
+pub extern "C" fn daedalus_unexpected_exception() {
 }
