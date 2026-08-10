@@ -202,46 +202,50 @@ impl IrqArch for GICv2 {
 
     unsafe fn setup() {
         // # Safety
-        // 
+        //
         // This is called exactly once, so it doesn't really matter.
-        // 
+        //
         // Theres no IRQ arch ops called before this.
-        // 
+        //
         // Only ran on one core.
         unsafe {
-            // setup the exception vector table so stuff can arrive at `Daedalus`
+            // Setup the exception vector table so stuff can arrive at `Daedalus`
             install_exception_vectors();
+
+            // Stop the distributor/interface, since stuff may be left over from prior
+            // boot phases and we dont want to recieve stuff yet.
+            GICDRegisters::CTLR.write(0);
+            GICCRegisters::CTLR.write(0);
+
+            // first reset everything ! (left over from prior phase)
+            reset_interrupts();
+
+            // since PMR may start/be at a lower value than our expected PMR mask, update it
+            GICCRegisters::PMR.write(PMR_PRIORITY_MASK);
+
+            // allow interrupts again
+            GICDRegisters::CTLR.write(1);
+            GICCRegisters::CTLR.write(1);
+
+            // unmask everything so we can actually start recieving
+            core::arch::asm!("msr daifclr, #2", options(nomem, nostack));
         }
     }
 
     unsafe fn teardown() {
         // # Safety
-        // 
+        //
         // This is called exactly once, so it doesn't really matter,
         // and theres no more irq arch ops so its like okay ^_^
         //
         // This is also called after `setup` and only ran on one core,
         // so these ops are safe.
         unsafe {
-            core::arch::asm!("msr daifset, #2", options(nomem, nostack));
-            
-            // reset state for all lines
-            let lines = line_count();
+            // disable interrupts, we never restore them.
+            _ = Self::disable_interrupts();
 
-            for interrupt_id in FIRST_DEVICE_INTERRUPT_ID..lines {
-                // This is a bit-per-interrupt register.
-                // Un-enable all the interrupts.
-                GICDRegisters::ICENABLER.write_interrupt_bit(interrupt_id);
-            
-                // This is a bit-per-interrupt register.
-                // Clear the pending state of all interrupts.
-                GICDRegisters::ICPENDR.write_interrupt_bit(interrupt_id);
-            
-                // This is a bit-per-interrupt register.
-                // Clear all of the active state interrupts too,
-                // this is bcz the active prior is set
-                GICDRegisters::ICACTIVER.write_interrupt_bit(interrupt_id);
-            }
+            // reset all the interrupt state.
+            reset_interrupts();
 
             // Clear all the CTLR to stop signaling for everything
             GICCRegisters::CTLR.write(0);
@@ -609,9 +613,9 @@ unsafe fn line_count() -> u32 {
 
 /// Installs the exception vector table into `VBAR_EL1` (where
 /// da table should go nya~)
-/// 
+///
 /// # Safety
-/// 
+///
 /// This must be called only by setup once, before the GICC and GICD
 /// are enabled by CTLR
 unsafe fn install_exception_vectors() {
@@ -633,15 +637,45 @@ unsafe fn install_exception_vectors() {
 
 /// This is the interrupt service routine called by aarch64
 /// on an interrupt from the vector table setup by `install_exception_vectors`.
-/// 
+///
 /// This must be allocation free.
 #[unsafe(no_mangle)]
-pub extern "C" fn daedalus_irq_handler() {
-}
+pub extern "C" fn daedalus_irq_handler() {}
 
 /// This is called for any other exception which isnt the `daedalus_irq_handler`
-/// 
+///
 /// These are all like unexpected and explode. (do not eret or i will kill  you  (to myself wuehehe :3))
 #[unsafe(no_mangle)]
-pub extern "C" fn daedalus_unexpected_exception() {
+pub extern "C" fn daedalus_unexpected_exception() {}
+
+/// Resets the state of all interrupts starting
+/// at FIRST_DEVICE_INTERRUPT_ID up to `line_count()`
+///
+/// # Safety
+///
+/// This should only be called during `setup` or `teardown`.
+/// 
+/// The gic must actually exist and be mapped in.
+unsafe fn reset_interrupts() {
+    // # Safety
+    //
+    // Preconditions of gic existing are kept by this function's preconditions
+    unsafe {
+        let lines = line_count();
+
+        for interrupt_id in FIRST_DEVICE_INTERRUPT_ID..lines {
+            // This is a bit-per-interrupt register.
+            // Un-enable all the interrupts.
+            GICDRegisters::ICENABLER.write_interrupt_bit(interrupt_id);
+
+            // This is a bit-per-interrupt register.
+            // Clear the pending state of all interrupts.
+            GICDRegisters::ICPENDR.write_interrupt_bit(interrupt_id);
+
+            // This is a bit-per-interrupt register.
+            // Clear all of the active state interrupts too,
+            // this is bcz the active prior is set
+            GICDRegisters::ICACTIVER.write_interrupt_bit(interrupt_id);
+        }
+    }
 }
