@@ -8,6 +8,7 @@ use daedalus_program::{InterruptPriority, InterruptTrigger};
 
 use crate::irq::{
     arch::IrqArch,
+    pending::record_pending_interrupt,
     plats::{GIC_CPU_INTERFACE_BASE, GIC_DISTRIBUTOR_BASE},
 };
 
@@ -29,12 +30,6 @@ const FIRST_DEVICE_INTERRUPT_ID: u32 = 16;
 /// upper bound inherently for interrupt ids
 const FIRST_SPECIAL_INTERRUPT_ID: u32 = 1020;
 
-/// The first shared peripheral interrupt's ID
-///
-/// Below this is private peripheral interrupts,
-/// which are per-core/CPU.
-const FIRST_SHARED_INTERRUPT_ID: u32 = 32;
-
 /// The initial PMR priority mask value.
 ///
 /// The PMR registser disallows anything below its set value
@@ -52,6 +47,10 @@ const TARGET_CPU0: u8 = 0x01;
 /// The field to read from GICD_TYPER to read
 /// out the number of interrupt lines
 const GICD_TYPER_ITLINESNUMBER_MASK: u32 = 0x1F;
+
+/// The field to read from GICC_IAR to read
+/// the interrupt id of the interrupt
+const GICC_IAR_INTERRUPT_ID_MASK: u32 = 0x3FF;
 
 // Distributer registers
 pub enum GICDRegisters {
@@ -639,14 +638,77 @@ unsafe fn install_exception_vectors() {
 /// on an interrupt from the vector table setup by `install_exception_vectors`.
 ///
 /// This must be allocation free.
+///
+/// The main purpose of our irq handler here
+/// is to update the pending state about the recieved
+/// IRQ into the pending tracker.
+///
+/// We must ensure this interrupt can not fire again until
+/// it has been drained from `PENDING_INTERRUPTS` or we can
+/// overflow it.
+///
+/// Returning from this will restore register state and eret
 #[unsafe(no_mangle)]
-pub extern "C" fn daedalus_irq_handler() {}
+pub extern "C" fn daedalus_irq_handler() {
+    // # Safety
+    //
+    // This is in the "interrupt context" since
+    // we are the irq handler called by aarch64 from the EVT.
+    unsafe {
+        // Acknowledge the interrupt (also to get its id which is [9:0])
+        let acknowledged = GICCRegisters::IAR.read();
+        let interrupt_id = acknowledged & GICC_IAR_INTERRUPT_ID_MASK;
+
+        // We do NOT want to deal with these interrupts.
+        // these are special reserved ones (bad things will happen if we do grrr)
+        if interrupt_id >= FIRST_SPECIAL_INTERRUPT_ID {
+            return;
+        }
+
+        // We need to mask here, as else EOIR below would
+        // cause re-activation since the program hasn't yet cleared
+        // the condition for this interrupt from the device.
+        GICv2::mask(interrupt_id);
+
+        // MIMO write, so dsb here to ensure the mask occurs first
+        // and isnst reordered
+        core::arch::asm!("dsb sy", options(nostack, preserves_flags));
+
+        // now record pending interrupt so our program can handle it,
+        // duplciate entries inherently cant occured because the interrupt
+        // is masked!
+        record_pending_interrupt(interrupt_id);
+
+        // see `GICCRegisters::EOIR` :)
+        GICCRegisters::EOIR.write(acknowledged);
+    }
+}
 
 /// This is called for any other exception which isnt the `daedalus_irq_handler`
 ///
 /// These are all like unexpected and explode. (do not eret or i will kill  you  (to myself wuehehe :3))
 #[unsafe(no_mangle)]
-pub extern "C" fn daedalus_unexpected_exception() {}
+pub extern "C" fn daedalus_unexpected_exception() {
+    let syndrome: u64;
+    let link: u64;
+    let fault_address: u64;
+
+    // # Safety
+    //
+    // All of these registers are readable at EL1 and
+    // we die after anyway so blah blah blah haha jonathan gas leak
+    //
+    // they just provide nice debug info so i dont pull my hair out too much.,
+    unsafe {
+        core::arch::asm!("mrs {}, esr_el1", out(reg) syndrome, options(nomem, nostack));
+        core::arch::asm!("mrs {}, elr_el1", out(reg) link, options(nomem, nostack));
+        core::arch::asm!("mrs {}, far_el1", out(reg) fault_address, options(nomem, nostack));
+    }
+
+    panic!(
+        "daedalus got an unexpected exception: esr_el1={syndrome:#x} elr_el1={link:#x} far_el1={fault_address:#x}"
+    );
+}
 
 /// Resets the state of all interrupts starting
 /// at FIRST_DEVICE_INTERRUPT_ID up to `line_count()`
@@ -654,7 +716,7 @@ pub extern "C" fn daedalus_unexpected_exception() {}
 /// # Safety
 ///
 /// This should only be called during `setup` or `teardown`.
-/// 
+///
 /// The gic must actually exist and be mapped in.
 unsafe fn reset_interrupts() {
     // # Safety
