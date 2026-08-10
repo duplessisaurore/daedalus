@@ -411,6 +411,51 @@ impl GICDRegisters {
             self.write_with_offset(index, bit);
         }
     } 
+
+    /// This essentailly writes a two-bit field to a two-bits-per-interrupt
+    /// GICD register.
+    ///
+    /// This is similar to `write_byte_register` because the value is held
+    /// there rather than having a set/clear bit-wise variant.
+    ///
+    /// This nukes whatever value was in the byte !!!
+    ///
+    /// # Safety
+    ///
+    /// The gic must be like actually there and mapped in.
+    ///
+    /// The register we are writing to must be an actual
+    /// two-bits-per-interrupt GICD register.
+    unsafe fn write_interrupt_two_bit_register(&self, interrupt_id: u32, two_bit_value: u8) {
+        // 16 interrupts per 32-bit register.
+        let index = ((interrupt_id & !0xF) as usize) >> 2;
+ 
+        // Two bits, this is the shift to our specific interrupt
+        let shift = (interrupt_id & 0xF) * 2;
+ 
+        // Read the full chunk
+        //
+        // # Safety
+        //
+        // precondition preserved by safety header of this function.
+        let mut chunk = unsafe { self.read_with_offset(index) };
+ 
+        // Clear out the existing field in the chunk
+        chunk &= !(0b11 << shift);
+ 
+        // Put the new field value in (ensure its only the first 2 bits)
+        chunk |= u32::from(two_bit_value & 0b11) << shift;
+ 
+        // Write back out
+        //
+        // # Safety
+        //
+        // precondition preserved by safety header of this function.
+        unsafe {
+            self.write_with_offset(index, chunk);
+        }
+    }
+
 }
 
 impl GICTriggerMapping {
