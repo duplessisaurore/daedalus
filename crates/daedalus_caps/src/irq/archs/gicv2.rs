@@ -190,11 +190,42 @@ impl IrqArch for GICv2 {
     }
 
     unsafe fn setup() {
-        todo!()
+        
     }
 
     unsafe fn teardown() {
-        todo!()
+        // # Safety
+        // 
+        // This is called exactly once, so it doesn't really matter,
+        // and theres no more irq arch ops so its like okay ^_^
+        //
+        // This is also called after `setup` and only ran on one core,
+        // so these ops are safe.
+        unsafe {
+            core::arch::asm!("msr daifset, #2", options(nomem, nostack));
+            
+            // reset state for all lines
+            let lines = line_count();
+
+            for interrupt_id in FIRST_DEVICE_INTERRUPT_ID..lines {
+                // This is a bit-per-interrupt register.
+                // Un-enable all the interrupts.
+                GICDRegisters::ICENABLER.write_interrupt_bit(interrupt_id);
+            
+                // This is a bit-per-interrupt register.
+                // Clear the pending state of all interrupts.
+                GICDRegisters::ICPENDR.write_interrupt_bit(interrupt_id);
+            
+                // This is a bit-per-interrupt register.
+                // Clear all of the active state interrupts too,
+                // this is bcz the active prior is set
+                GICDRegisters::ICACTIVER.write_interrupt_bit(interrupt_id);
+            }
+
+            // Clear all the CTLR to stop signaling for everything
+            GICCRegisters::CTLR.write(0);
+            GICDRegisters::CTLR.write(0);
+        }
     }
 
     unsafe fn configure(interrupt_id: u32, trigger: InterruptTrigger, priority: InterruptPriority) {
