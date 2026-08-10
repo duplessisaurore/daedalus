@@ -55,6 +55,10 @@ pub mod plats;
 /// are using for this build for IRQ
 pub mod archs;
 
+/// The actual capabilities themselves which provide IRQ
+/// access functionality
+pub mod capabilities;
+
 /// For the `virtual_machine` provided, this sends all of the corresponding
 /// pending interrupts to the program's inbox that they are bound to.
 ///

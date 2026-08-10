@@ -7,7 +7,7 @@ use core::{error::Error, fmt::Display};
 use alloc::string::String;
 use daedalus_program::{InvalidRegionPermissionBitsError, RegionPermissions};
 
-use crate::{memory::RegionHandle, program::CallTag};
+use crate::{irq::IrqHandle, memory::RegionHandle, program::CallTag};
 
 #[derive(Debug)]
 pub enum DaedalusCapErrors {
@@ -210,6 +210,18 @@ pub enum DaedalusCapErrors {
     /// A block-type operation of `copy`/`fill` occured on a non-
     /// `Memory` kind region.
     BlockOperationOnNonMemoryRegion,
+
+    /// Expected an IRQ handle on the stack, but
+    /// no IRQ handle could be found!
+    StackUnderflowExpectedIrqHandle,
+
+    /// An Irq handle was expected, but some other value type was
+    /// found on the stack instead.
+    IrqHandleExpected { found_type: &'static str },
+
+    /// A valid Irq handle was expected here, but this tag passed
+    /// was unknown to be a valid Irq handle for the current program.
+    UnknownIrqHandle(IrqHandle),
 }
 
 impl Display for DaedalusCapErrors {
@@ -484,6 +496,24 @@ impl Display for DaedalusCapErrors {
                 write!(
                     f,
                     "daedalus expected that block operations (`copy`/`fill`) only occur on `Memory` type regions, but it was executed on a non-memory type region!"
+                )
+            }
+            Self::StackUnderflowExpectedIrqHandle => {
+                write!(
+                    f,
+                    "daedalus expected to find an IRQ handle on the stack but nothing was found!"
+                )
+            }
+            Self::IrqHandleExpected { found_type } => {
+                write!(
+                    f,
+                    "daedalus expected an IRQ handle, but instead found a `{found_type}`!"
+                )
+            }
+            Self::UnknownIrqHandle(handle) => {
+                write!(
+                    f,
+                    "daedalus found attempt to invoke IRQ operation with tag `{handle:?}`, but this tag is not a handle to an IRQ, does it really refer to a valid IRQ binding?"
                 )
             }
         }
