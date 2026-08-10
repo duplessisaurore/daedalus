@@ -187,6 +187,44 @@ impl IrqArch for GICv2 {
             core::arch::asm!("msr daif, {}", in(reg) state.0, options(nomem, nostack));
         }
     }
+    
+    unsafe fn setup() {
+        todo!()
+    }
+    
+    unsafe fn teardown() {
+        todo!()
+    }
+    
+    unsafe fn configure(interrupt_id: u32, trigger: InterruptTrigger, priority: InterruptPriority) {
+        todo!()
+    }
+    
+    unsafe fn mask(interrupt_id: u32) {
+        // # Safety
+        //
+        // The ICENABLER is a clear-enable bit, so we are clearing it.
+        // which disables the interrupt (its an interrupt bit)
+        //
+        // gic enabled by the setup, which preconditions of this function
+        // require first.
+        unsafe {
+            GICDRegisters::ICENABLER.write_interrupt_bit(interrupt_id);
+        }
+    }
+    
+    unsafe fn unmask(interrupt_id: u32) {
+        // # Safety
+        //
+        // The ISENABLER is a set-enable bit, so we are setting it.
+        // which enables the interrupt (its an interrupt bit)
+        //
+        // gic enabled by the setup, which preconditions of this function
+        // require first.
+        unsafe {
+            GICDRegisters::ISENABLER.write_interrupt_bit(interrupt_id);
+        }
+    }
 }
 
 impl GICv2 {
