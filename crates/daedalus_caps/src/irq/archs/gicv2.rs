@@ -27,8 +27,9 @@ const FIRST_SHARED_INTERRUPT_ID: u32 = 32;
 /// The initial PMR priority mask value.
 ///
 /// The PMR registser disallows anything below its set value
-/// of priority, which is initialised initially to 0 (so everything
-/// explodes!) we set it to 0xFF to permit everything
+/// of priority (with 0 being "highest" and 255 being "lowest"), 
+/// which is initialised initially to 0 (so everything explodes!) 
+/// we set it to 0xFF to permit everything
 const PMR_PRIORITY_MASK: u32 = 0xFF;
 
 /// We assume a single-core environment
@@ -197,7 +198,7 @@ impl IrqArch for GICv2 {
     }
     
     unsafe fn configure(interrupt_id: u32, trigger: InterruptTrigger, priority: InterruptPriority) {
-        todo!()
+        
     }
     
     unsafe fn mask(interrupt_id: u32) {
@@ -304,7 +305,7 @@ impl GICDRegisters {
     /// the GIC must be like actually there lol
     pub unsafe fn read(&self) -> u32 {
         unsafe { 
-            Self::read_with_offset(&self, 0)
+            self.read_with_offset(0)
          }
     }
 
@@ -325,7 +326,7 @@ impl GICDRegisters {
     /// the GIC must be like actually there lol
     pub unsafe fn write(&self, value: u32) {
         unsafe {
-            Self::write_with_offset(&self, 0, value);
+            self.write_with_offset(0, value);
         }
     }
 
