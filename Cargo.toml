@@ -9,6 +9,6 @@ resolver = "3"
 hashbrown = "0.17.1"
 cfg-if = "1.0"
 linked_list_allocator = "0.10"
-lepton3 = { version = "10.0.1", git = "https://github.com/duplessisaurore/lepton3" }
+lepton3 = { version = "10", git = "https://github.com/duplessisaurore/lepton3" }
 daedalus_program = { path = "./crates/daedalus_program" }
 daedalus_caps = { path = "./crates/daedalus_caps" }

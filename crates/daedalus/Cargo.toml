@@ -15,6 +15,7 @@ keywords = ["languages", "scripting", "script"]
 [dependencies]
 linked_list_allocator = { workspace = true }
 cfg-if = { workspace = true }
+lepton3 = { workspace = true }
 daedalus_caps = { workspace = true }
 daedalus_program = { workspace = true }
 

@@ -17,3 +17,11 @@ mod entry;
 
 /// Heap setup for `Lepton3`
 mod heap;
+
+/// The actual entry point to `Lepton3` with a custom
+/// run-loop for handling IRQ's.
+mod run;
+
+/// The capabilities we provide to the `Lepton3` vm
+/// for the bootloader programs.
+mod capabilities;

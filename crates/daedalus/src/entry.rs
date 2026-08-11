@@ -7,7 +7,7 @@ use daedalus_caps::{
     memory::{arch::MemoryArch, archs::TargetMemoryArch},
 };
 
-use crate::heap;
+use crate::{heap, run::run};
 
 unsafe extern "C" {
     // This should be the extent of the .bss section
@@ -96,9 +96,5 @@ pub extern "C" fn rust_entry(_previous_stage_x0: u64) -> ! {
     // Initialise the heap, so we can use allocated structures
     // (lepton3 uses these heavily.)
     heap::initialise_heap();
-
-    // This should never be reached
-    loop {
-        core::hint::spin_loop();
-    }
+    run();
 }

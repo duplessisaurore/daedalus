@@ -21,6 +21,7 @@ dependencies = [
  "cfg-if",
  "daedalus_caps",
  "daedalus_program",
+ "lepton3",
  "linked_list_allocator",
 ]
 
