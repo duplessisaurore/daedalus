@@ -1,0 +1,21 @@
+[package]
+name = "daedalus"
+version = "1.0.0"
+edition = "2024"
+authors = ["The Daedalus Contributors"]
+
+description = "A services-oriented micro-bootloader built on the Lepton3 virtual machine."
+readme = "README.md"
+
+repository = "https://github.com/duplessisaurore/daedalus"
+license = "AGPLv3"
+
+keywords = ["languages", "scripting", "script"]
+
+[dependencies]
+daedalus_caps = { workspace = true }
+daedalus_program = { workspace = true }
+
+[features]
+# Supported platforms
+zcu106 = ["daedalus_caps/zcu106"]
