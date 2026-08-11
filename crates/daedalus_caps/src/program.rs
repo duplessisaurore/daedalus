@@ -19,7 +19,10 @@ use lepton3::{
 };
 
 use crate::{
-    errors::DaedalusCapErrors, ipc::migrate::migrate, irq::IrqBinding, memory::{MintedGrantRegions, Region, RegionHandle, mint_grants},
+    errors::DaedalusCapErrors,
+    ipc::migrate::migrate,
+    irq::{IrqBinding, arch::IrqArch, archs::TargetIRQArch},
+    memory::{MintedGrantRegions, Region, RegionHandle, mint_grants},
 };
 
 /// A unique program's call reply association
@@ -320,6 +323,26 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Inactive
         self.state = ProgramState::Ready;
         true
     }
+
+    /// This will release all IRQ bindings associated to
+    /// this inactive program.
+    ///
+    /// This should only be done when the program is expected
+    /// to never be swapped into again.
+    pub fn release_all_irqs(&self, daedalus_state: &mut DaedalusState<I, H, T>) {
+        daedalus_state.irqs.retain(|interrupt_id, binding| {
+            if binding.program != self.name {
+                return true;
+            }
+
+            // # Safety
+            //
+            // the binding exists in IRQs, so the id should be valid.
+            unsafe { TargetIRQArch::mask(*interrupt_id) };
+
+            false
+        });
+    }
 }
 
 impl<H: HeapAllocator, T: TagGenerator> ProgramSwappable<H, T>
@@ -382,9 +405,9 @@ pub struct DaedalusState<I: StaticLeptonImage + 'static, H: HeapAllocator, T: Ta
     pub current_program: &'static str,
 
     /// The total IRQ registrations by interrupt ID.
-    /// 
+    ///
     /// These are global, not per-program.
-    /// 
+    ///
     /// An interrupt service routine must never touch this,
     /// and it must only be touched in normal-context to
     /// weird corruption due to map ops being interrupted.

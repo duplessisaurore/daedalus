@@ -242,10 +242,13 @@ fn run_next_ready<H: HeapAllocator, T: TagGenerator>(
         virtual_machine.swap(next_program, save_current.unwrap_or(ProgramState::Ready));
 
     // If we should save the current program, shove it into the programs
-    // as an incative program, or drop it
+    // as an inactive program, or drop it
     let state = &mut virtual_machine.capability_state;
     match save_current {
-        None => {}
+        None => {
+            // Drop all IRQs so that a new program can bind to them
+            old_program.release_all_irqs(state);
+        }
         Some(program_state) => {
             let previous_name = old_program.name;
 
