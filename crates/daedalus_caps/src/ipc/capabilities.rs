@@ -52,9 +52,7 @@ use lepton3::{
 };
 
 use crate::{
-    errors::DaedalusCapErrors,
-    ipc::migrate::migrate,
-    program::{
+    errors::DaedalusCapErrors, ipc::migrate::migrate, irq::send_irqs, program::{
         CallAssociation, CallTag, DaedalusState, InactiveProgram, Message, ProgramState,
         ProgramSwappable,
     },
@@ -426,6 +424,17 @@ pub fn cap_block_recv<H: HeapAllocator, T: TagGenerator>(
     virtual_machine: &mut DaedalusVm<H, T>,
 ) -> Result<(), Box<dyn Error>> {
     loop {
+        // If an IRQ was delivered we should handle it earlier 
+        // than going into block as a faster path
+        //
+        // # Safety
+        //
+        // `cap_block_recv` is only ran in a normal program-executing context,
+        // and daedalus is single core.
+        unsafe {
+            send_irqs(virtual_machine);
+        }
+
         // Check if there is already something in the inbox (fast-path)
         if let Some(message) = virtual_machine.capability_state.inbox.pop_front() {
             // Ok! we have something, add it to our stack and return
