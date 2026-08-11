@@ -211,7 +211,7 @@ fn ensure_runnable<H: HeapAllocator, T: TagGenerator>(
 /// This saves the old program with the state of `save_current` (if Some), this is
 /// an `Option` as we may not actually want to save the program, and if `None` the
 /// program is simply dropped.
-fn run_next_ready<H: HeapAllocator, T: TagGenerator>(
+pub fn run_next_ready<H: HeapAllocator, T: TagGenerator>(
     virtual_machine: &mut DaedalusVm<H, T>,
     save_current: Option<ProgramState>,
 ) -> Result<(), DaedalusCapErrors> {
