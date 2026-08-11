@@ -82,7 +82,7 @@ pub unsafe fn send_irqs<H: HeapAllocator, T: TagGenerator>(virtual_machine: &mut
     // normal context preconditions preserved
     // we are also routing the fired interrupts through to the inboxes.
     let mut fired = [0u32; TOTAL_POSSIBLE_SIMULTANEOUS_INTERRUPTS];
-    let num_fired = unsafe { drain_pending_into_buf(&mut fired) };
+    let num_fired = drain_pending_into_buf(&mut fired);
 
     for interrupt_id in &fired[..num_fired] {
         // Get the program this interrupt should route to

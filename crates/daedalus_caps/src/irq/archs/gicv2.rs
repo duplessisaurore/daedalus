@@ -53,6 +53,7 @@ const GICD_TYPER_ITLINESNUMBER_MASK: u32 = 0x1F;
 const GICC_IAR_INTERRUPT_ID_MASK: u32 = 0x3FF;
 
 // Distributer registers
+#[allow(clippy::upper_case_acronyms)]
 pub enum GICDRegisters {
     /// Control register
     ///
@@ -121,6 +122,7 @@ pub enum GICDRegisters {
 }
 
 /// CPU Interface Registers
+#[allow(clippy::upper_case_acronyms)]
 pub enum GICCRegisters {
     /// Control register
     ///

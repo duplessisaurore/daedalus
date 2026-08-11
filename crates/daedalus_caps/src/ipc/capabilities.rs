@@ -52,7 +52,10 @@ use lepton3::{
 };
 
 use crate::{
-    errors::DaedalusCapErrors, ipc::migrate::migrate, irq::send_irqs, program::{
+    errors::DaedalusCapErrors,
+    ipc::migrate::migrate,
+    irq::send_irqs,
+    program::{
         CallAssociation, CallTag, DaedalusState, InactiveProgram, Message, ProgramState,
         ProgramSwappable,
     },
@@ -424,7 +427,7 @@ pub fn cap_block_recv<H: HeapAllocator, T: TagGenerator>(
     virtual_machine: &mut DaedalusVm<H, T>,
 ) -> Result<(), Box<dyn Error>> {
     loop {
-        // If an IRQ was delivered we should handle it earlier 
+        // If an IRQ was delivered we should handle it earlier
         // than going into block as a faster path
         //
         // # Safety

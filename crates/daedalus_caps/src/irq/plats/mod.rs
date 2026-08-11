@@ -1,6 +1,6 @@
 //! All implemented platform specific things
 //! exist within this submodule
-//! 
+//!
 //! Generally some more generic higher level
 //! `IrqArch` can be implemented in `archs`,
 //! but the platform specific things are here.

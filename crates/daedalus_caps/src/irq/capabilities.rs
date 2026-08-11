@@ -18,25 +18,14 @@ use crate::{
     irq::{IrqBinding, IrqHandle, arch::IrqArch, archs::TargetIRQArch},
 };
 
-/// Wrapped IRQ information that
-/// is used everywhere lol, cleaner than tuples !! imo
-#[derive(Clone, Copy, Debug)]
-struct IrqInfo {
-    /// The id of the interrupt this IRQ refers to
-    interrupt_id: u32,
-
-    /// The active binding to this interrupt id.
-    binding: IrqBinding,
-}
-
-/// Pops an IrqInfo from the stack.
+/// Pops an interrupt number from a corresponding IRQ handle from the stack.
 ///
 /// This will validate that the IrqHandle is actively bound
 /// to the current program and valid and return the corresponding
 /// live binding and interrupt number as an IrqInfo
-fn pop_irq_info<H: HeapAllocator, T: TagGenerator>(
+fn pop_interrupt_number<H: HeapAllocator, T: TagGenerator>(
     virtual_machine: &mut DaedalusVm<H, T>,
-) -> Result<IrqInfo, DaedalusCapErrors> {
+) -> Result<u32, DaedalusCapErrors> {
     // same stuff as `cap_is_irq_handle`.
     let value = virtual_machine
         .stack
@@ -59,10 +48,7 @@ fn pop_irq_info<H: HeapAllocator, T: TagGenerator>(
         .irqs
         .iter()
         .find(|(_, binding)| binding.irq_handle == irq_handle && binding.program == current)
-        .map(|(interrupt_id, binding)| IrqInfo {
-            interrupt_id: *interrupt_id,
-            binding: *binding,
-        })
+        .map(|(interrupt_id, _)| *interrupt_id)
         .ok_or(DaedalusCapErrors::UnknownIrqHandle(irq_handle))
 }
 
@@ -125,10 +111,7 @@ pub fn cap_irq_release<H: HeapAllocator, T: TagGenerator>(
     virtual_machine: &mut DaedalusVm<H, T>,
 ) -> Result<(), Box<dyn Error>> {
     // Get the irq handle
-    let IrqInfo {
-        interrupt_id,
-        binding: _,
-    } = pop_irq_info(virtual_machine)?;
+    let interrupt_id = pop_interrupt_number(virtual_machine)?;
 
     // Mask the interrupt,
     //
@@ -158,10 +141,7 @@ pub fn cap_irq_ack<H: HeapAllocator, T: TagGenerator>(
     virtual_machine: &mut DaedalusVm<H, T>,
 ) -> Result<(), Box<dyn Error>> {
     // Get the irq handle
-    let IrqInfo {
-        interrupt_id,
-        binding: _,
-    } = pop_irq_info(virtual_machine)?;
+    let interrupt_id = pop_interrupt_number(virtual_machine)?;
 
     // Unmask the interrupt,
     //
