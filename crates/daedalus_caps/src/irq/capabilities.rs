@@ -5,6 +5,8 @@
 use core::error::Error;
 
 use alloc::boxed::Box;
+use daedalus_program::find_program_interrupt_under_id;
+use hashbrown::hash_map::Entry;
 use lepton3::lepton_vm::{
     heap_allocator::HeapAllocator, tagger::TagGenerator, values::Value,
     virtual_machine::value_type_name,
@@ -147,7 +149,7 @@ pub fn cap_irq_release<H: HeapAllocator, T: TagGenerator>(
 ///
 /// Unmasks an interrupt so that it may activate again.
 ///
-///     [<top> `irq`] 
+///     [<top> `irq`]
 ///
 /// This does not do anything other than unmasking, it is up to
 /// the program to properly clear the activation condition or
@@ -169,5 +171,96 @@ pub fn cap_irq_ack<H: HeapAllocator, T: TagGenerator>(
     // due to `pop_irq_info` so this is safe
     unsafe { TargetIRQArch::unmask(interrupt_id) };
 
+    Ok(())
+}
+
+/// = `irq_register`
+///
+/// Registers and binds a hardware interrupt with some ID to the current program.
+///
+/// This takes the `interrupt id` as an UInt:
+///
+///     [<top> `interrupt_id`]
+///
+/// The interrupt id must be granted to the current program from its manifest, and
+/// there must be no other registrations bound to this interrupt id currently active.
+///
+/// This outputs the corresponding binding as an IRQ handle which is used to
+/// refer to it in following capabilities, and inbox messages delivered on the interrupt
+/// activation:
+///
+///     [<top> `irq`]
+///
+/// The configuration of the interrupt, that is it's trigger type, priority level etc.
+/// are all done in the manifest statically.
+pub fn cap_irq_register<H: HeapAllocator, T: TagGenerator>(
+    virtual_machine: &mut DaedalusVm<H, T>,
+) -> Result<(), Box<dyn Error>> {
+    // Get the interrupt id we are trying to bind to
+    let value = virtual_machine
+        .stack
+        .pop()
+        .ok_or(DaedalusCapErrors::StackUnderflowExpectedInterruptId)?;
+
+    let Value::UInt(raw) = value else {
+        return Err(DaedalusCapErrors::InterruptIdExpected {
+            found_type: value_type_name(&value),
+        })?;
+    };
+
+    // Check if this is actually a valid interrupt id under the target irq arch
+    let interrupt_id = u32::try_from(raw)
+        .ok()
+        .filter(|id| TargetIRQArch::is_valid_irq_wrapper(*id))
+        .ok_or(DaedalusCapErrors::InvalidInterruptId {
+            raw_interrupt_id: raw,
+        })?;
+
+    let current = virtual_machine.capability_state.current_program;
+
+    // Get the declaration for the interrupt under this program
+    let declaration = find_program_interrupt_under_id(current, interrupt_id).ok_or(
+        DaedalusCapErrors::InterruptNotDeclared {
+            interrupt_id,
+            program: current,
+        },
+    )?;
+
+    // Already bound elsewhere?
+    match virtual_machine.capability_state.irqs.entry(interrupt_id) {
+        // Uh oh, already bound
+        Entry::Occupied(occupied_entry) => Err(DaedalusCapErrors::InterruptAlreadyRegistered {
+            interrupt_id,
+            original_program: occupied_entry.get().program,
+            new_program: current,
+        })?,
+
+        // We can fill it in as its not bound
+        Entry::Vacant(_) => {}
+    }
+
+    // Make a new irq handle for this binding.
+    let irq_handle = IrqHandle(virtual_machine.tagger.allocate_tag());
+
+    virtual_machine.capability_state.irqs.insert(
+        interrupt_id,
+        IrqBinding {
+            program: current,
+            irq_handle,
+        },
+    );
+
+    // # Safety
+    //
+    // We know the id is valid for this controller, and any level of priority/trigger
+    // should be valid regardless.
+    //
+    // Setup ran on start of `Daedalus`.
+    unsafe {
+        TargetIRQArch::configure(interrupt_id, declaration.trigger, declaration.priority);
+        TargetIRQArch::unmask(interrupt_id);
+    }
+
+    virtual_machine.stack.push(Value::Tag(irq_handle.0));
     Ok(())
 }

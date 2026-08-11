@@ -222,6 +222,32 @@ pub enum DaedalusCapErrors {
     /// A valid Irq handle was expected here, but this tag passed
     /// was unknown to be a valid Irq handle for the current program.
     UnknownIrqHandle(IrqHandle),
+
+    /// Expected an interrupt id on the stack, but
+    /// no interrupt id could be found!
+    StackUnderflowExpectedInterruptId,
+
+    /// An interrupt id was expected, but some other value type was
+    /// found on the stack instead.
+    InterruptIdExpected { found_type: &'static str },
+
+    /// This interrupt id was invalid under the target IRQ arch.
+    /// Not allowed !!! ggrrr we cant rlly use it.
+    InvalidInterruptId { raw_interrupt_id: u64 },
+
+    /// This interrupt id was valid under the current arch, but not declared
+    /// under the current program for registration
+    InterruptNotDeclared {
+        interrupt_id: u32,
+        program: &'static str,
+    },
+
+    /// This interrupt was already registered
+    InterruptAlreadyRegistered {
+        interrupt_id: u32,
+        original_program: &'static str,
+        new_program: &'static str,
+    },
 }
 
 impl Display for DaedalusCapErrors {
@@ -514,6 +540,43 @@ impl Display for DaedalusCapErrors {
                 write!(
                     f,
                     "daedalus found attempt to invoke IRQ operation with tag `{handle:?}`, but this tag is not a handle to an IRQ, does it really refer to a valid IRQ binding?"
+                )
+            }
+            Self::StackUnderflowExpectedInterruptId => {
+                write!(
+                    f,
+                    "daedalus expected to find an interrupt id on the stack but nothing was found!"
+                )
+            }
+            Self::InterruptIdExpected { found_type } => {
+                write!(
+                    f,
+                    "daedalus expected an interrupt id, but instead found a `{found_type}`!"
+                )
+            }
+            Self::InvalidInterruptId { raw_interrupt_id } => {
+                write!(
+                    f,
+                    "daedalus expected a valid interrupt id under the current architecture, but instead got an interrupt id of `{raw_interrupt_id}`!"
+                )
+            }
+            Self::InterruptNotDeclared {
+                interrupt_id,
+                program,
+            } => {
+                write!(
+                    f,
+                    "The program `{program}` attempted to register/bind an interrupt of id `{interrupt_id}`. However, the program has not declared this interrupt in its manifest!"
+                )
+            }
+            Self::InterruptAlreadyRegistered {
+                interrupt_id,
+                original_program,
+                new_program,
+            } => {
+                write!(
+                    f,
+                    "daedalus found an unexpected duplicate interrupt registration of interrupt with id `{interrupt_id}`, original program registered: `{original_program}`, new program attempting: `{new_program}`!"
                 )
             }
         }

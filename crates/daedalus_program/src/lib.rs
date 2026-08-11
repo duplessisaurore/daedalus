@@ -259,3 +259,17 @@ pub enum InterruptTrigger {
     /// This signal is a momentary pulse
     Edge,
 }
+
+/// Attempt to retrieve an `Interrupt` of some `interrupt_id`
+/// under the `program`.
+/// 
+/// This returns `Some(&'static Interrupt)` if its found, else None.
+pub fn find_program_interrupt_under_id(
+    program: &'static str,
+    interrupt_id: u32,
+) -> Option<&'static Interrupt> {
+    get_program(program)?
+        .interrupts
+        .iter()
+        .find(|interrupt| interrupt.id == interrupt_id)
+}
