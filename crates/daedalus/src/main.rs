@@ -15,3 +15,5 @@ extern crate alloc;
 /// The entry point to `Daedalus` is defined here
 mod entry;
 
+/// Heap setup for `Lepton3`
+mod heap;
