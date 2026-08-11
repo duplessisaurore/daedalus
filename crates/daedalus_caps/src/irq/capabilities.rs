@@ -13,7 +13,7 @@ use lepton3::lepton_vm::{
 use crate::{
     errors::DaedalusCapErrors,
     ipc::capabilities::DaedalusVm,
-    irq::{IrqBinding, IrqHandle},
+    irq::{IrqBinding, IrqHandle, arch::IrqArch, archs::TargetIRQArch},
 };
 
 /// Wrapped IRQ information that
@@ -103,5 +103,71 @@ pub fn cap_is_irq_handle<H: HeapAllocator, T: TagGenerator>(
         .any(|binding| binding.irq_handle == irq_handle && binding.program == current);
 
     virtual_machine.stack.push(Value::Bool(held));
+    Ok(())
+}
+
+/// = `irq_release`
+///
+/// Drops one of the current program's own IRQ registrations referred to
+/// to by an IRQ handle.
+///
+///     [<top> `irq`]
+///
+/// The line will be masked and the registration removed.
+///
+/// This will permit another program to register with this IRQ, and
+/// the current program can re-register at any time.
+///
+/// Any other handles to this binding will cease to function.
+pub fn cap_irq_release<H: HeapAllocator, T: TagGenerator>(
+    virtual_machine: &mut DaedalusVm<H, T>,
+) -> Result<(), Box<dyn Error>> {
+    // Get the irq handle
+    let IrqInfo {
+        interrupt_id,
+        binding: _,
+    } = pop_irq_info(virtual_machine)?;
+
+    // Mask the interrupt,
+    //
+    // # Safety
+    //
+    // we know the binding must exist
+    // due to `pop_irq_info` so this is safe
+    unsafe {
+        TargetIRQArch::mask(interrupt_id);
+    }
+
+    // Remove from the total irq bindings.
+    virtual_machine.capability_state.irqs.remove(&interrupt_id);
+    Ok(())
+}
+
+/// = `irq_ack`
+///
+/// Unmasks an interrupt so that it may activate again.
+///
+///     [<top> `irq`] 
+///
+/// This does not do anything other than unmasking, it is up to
+/// the program to properly clear the activation condition or
+/// whatever for this interrupt, depending on what the program wants.
+pub fn cap_irq_ack<H: HeapAllocator, T: TagGenerator>(
+    virtual_machine: &mut DaedalusVm<H, T>,
+) -> Result<(), Box<dyn Error>> {
+    // Get the irq handle
+    let IrqInfo {
+        interrupt_id,
+        binding: _,
+    } = pop_irq_info(virtual_machine)?;
+
+    // Unmask the interrupt,
+    //
+    // # Safety
+    //
+    // we know the binding must exist
+    // due to `pop_irq_info` so this is safe
+    unsafe { TargetIRQArch::unmask(interrupt_id) };
+
     Ok(())
 }
