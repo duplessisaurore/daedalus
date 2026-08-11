@@ -50,9 +50,9 @@ pub struct Program<Image: StaticLeptonImage + 'static> {
     pub grants: &'static [Grant],
 
     /// The interrupts assigned to this process.
-    /// 
+    ///
     /// These are static assignments from the manifest
-    pub interrupts: &'static [Interrupt]
+    pub interrupts: &'static [Interrupt],
 }
 
 /// One Lepton3 daedalus phase
@@ -214,15 +214,15 @@ pub enum GrantLen {
 }
 
 /// This is the priority level of an interrupt
-/// 
-/// This is a normalised scale from 
-/// 
+///
+/// This is a normalised scale from
+///
 /// 0 - Most urgent
 /// 255 - Least urgent
-/// 
+///
 /// The specific interrupt arch should map this
 /// to their own corresponding priority system.
-/// 
+///
 /// The granularity may also not be portable (as
 /// in there may not be 255 uniq levels), in that
 /// case simply chunk the normalised priority into
@@ -233,23 +233,23 @@ pub struct InterruptPriority(pub u8);
 /// One interrupt that is assigned to this process.
 pub struct Interrupt {
     /// The unique ID of this interrupt on hardware.
-    /// 
+    ///
     /// This must be the *actual* interrupt id.
     pub id: u32,
 
     /// The trigger type of the interrupt.
-    /// 
+    ///
     /// This determines how the interrupt is maintained active wise.
     pub trigger: InterruptTrigger,
 
-   /// How urgent this interrupt is relative to others.
-   /// 
-   /// See `InterruptPriority`
+    /// How urgent this interrupt is relative to others.
+    ///
+    /// See `InterruptPriority`
     pub priority: InterruptPriority,
 }
 
 /// The trigger type of an interrupt
-/// 
+///
 /// This defines how its activated
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum InterruptTrigger {
@@ -262,7 +262,7 @@ pub enum InterruptTrigger {
 
 /// Attempt to retrieve an `Interrupt` of some `interrupt_id`
 /// under the `program`.
-/// 
+///
 /// This returns `Some(&'static Interrupt)` if its found, else None.
 pub fn find_program_interrupt_under_id(
     program: &'static str,

@@ -26,7 +26,7 @@ struct Manifest {
 
     /// All of the interrupts (irq defs) for this program
     #[serde(default)]
-    interrupts: Vec<InterruptSpec>
+    interrupts: Vec<InterruptSpec>,
 }
 
 /// The parsed content of a Daedalus
@@ -143,7 +143,6 @@ struct InterruptSpec {
     priority: InterruptPrioritySpec,
 }
 
-
 /// See `InterruptPriority`
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
@@ -169,7 +168,7 @@ pub enum InterruptPriorityKeyword {
     Low,
 
     /// 255
-    Lowest
+    Lowest,
 }
 
 /// Keyworded interrupt trigger types
@@ -255,11 +254,13 @@ fn write_out_image(name: &str, image_path: PathBuf, out: &mut String) -> String 
     writeln!(
         out,
         "
+        #[allow(nonstandard_style)]
         pub struct {debug_struct_name} {{
             pub files: [&'static str; {debug_files}],
             pub locations: [StaticSourceLocation; {debug_locations}]
         }}
 
+        #[allow(nonstandard_style)]
         pub struct {struct_name} {{
             pub header: Header,
             pub object_table: [ObjectType; {object_table_size}],
@@ -521,13 +522,11 @@ fn main() {
         let mut grants_table_literal = String::from("[");
         let mut seen_grants = HashSet::new();
         for grant in &manifest.grants {
-
             if seen_grants.contains(&grant.role) {
-            panic!(
-                "\x1b[93mprogram `{}`: contains duplicate grants of name {}, this is not permitted\x1b[0m",
-                manifest.name,
-                grant.role,
-            )
+                panic!(
+                    "\x1b[93mprogram `{}`: contains duplicate grants of name {}, this is not permitted\x1b[0m",
+                    manifest.name, grant.role,
+                )
             }
             seen_grants.insert(&grant.role);
 
@@ -581,13 +580,11 @@ fn main() {
         let mut interrupts_table_literal = String::from("[");
         let mut seen_interrupts = HashSet::new();
         for interrupt in &manifest.interrupts {
-
             if seen_interrupts.contains(&interrupt.id) {
-            panic!(
-                "\x1b[93mprogram `{}`: contains duplicate interrupts of id {}, this is not permitted\x1b[0m",
-                manifest.name,
-                interrupt.id,
-            )
+                panic!(
+                    "\x1b[93mprogram `{}`: contains duplicate interrupts of id {}, this is not permitted\x1b[0m",
+                    manifest.name, interrupt.id,
+                )
             }
             seen_interrupts.insert(&interrupt.id);
 
@@ -602,7 +599,7 @@ fn main() {
                 InterruptPrioritySpec::Priority(level) => format!("InterruptPriority({})", level),
                 InterruptPrioritySpec::Keyword(kwrd) => kwrd.map_to_priority_level().to_string(),
             };
-        
+
             // Track this as part of total interrupts to get the total
             // possible at once out at the end.
             total_interrupts.insert(interrupt.id);
@@ -865,12 +862,11 @@ fn main() {
     fs::write(&out_file, output).unwrap();
 }
 
-
 impl InterruptPriorityKeyword {
     /// Maps a priovided `InterruptPriorityKeyword` into
     /// a stringified version of an `InterruptPriority` that
     /// initialises the interrupt priority of this level.
-    /// 
+    ///
     /// E.g Highest => InterruptPriority(0);
     pub const fn map_to_priority_level(&self) -> &'static str {
         match self {
