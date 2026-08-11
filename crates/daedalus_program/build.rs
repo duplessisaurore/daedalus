@@ -662,6 +662,7 @@ fn main() {
         "
         /// The enum variant of all images because they're all one
         /// constant static type
+        #[allow(nonstandard_style)]
         pub enum StaticDaedalusImageVariants {{
             {enum_variants}  
         }}
