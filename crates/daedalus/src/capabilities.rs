@@ -3,12 +3,15 @@
 
 use alloc::vec::Vec;
 use daedalus_caps::program::DaedalusState;
+use daedalus_caps::{
+    ipc::capabilities as ipc, irq::capabilities as irq, memory::capabilities as mem,
+};
 use daedalus_program::{StaticDaedalusImageVariants, StaticSourceLocation};
-use lepton3::{CapabilityFn, lepton_vm::{heap_allocator::HeapAllocator, tagger::TagGenerator}};
-    use daedalus_caps::{
-        ipc::capabilities as ipc, irq::capabilities as irq, memory::capabilities as mem,
-    };
-    
+use lepton3::{
+    CapabilityFn,
+    lepton_vm::{heap_allocator::HeapAllocator, tagger::TagGenerator},
+};
+
 /// This is the expected type for the `CapabilityFn`'s of `Daedalus`
 /// that are provided by `daedalus_caps`
 pub type DaedalusCapabilityFn<H, T> = CapabilityFn<
@@ -20,15 +23,13 @@ pub type DaedalusCapabilityFn<H, T> = CapabilityFn<
     StaticDaedalusImageVariants,
 >;
 
-
 /// This returns the full set of `CapabilityFn`'s providedd by
 /// `daedalus_caps`.
-/// 
+///
 /// This includes: IPC, IRQs, Memory.
-/// 
+///
 /// Awrrufff!
-pub fn all<H: HeapAllocator, T: TagGenerator>()
--> Vec<DaedalusCapabilityFn<H, T>> {
+pub fn all<H: HeapAllocator, T: TagGenerator>() -> Vec<DaedalusCapabilityFn<H, T>> {
     // rust kinda struggles to infer the type, so we need to help it out
     let mut caps: Vec<DaedalusCapabilityFn<H, T>> = Vec::new();
 

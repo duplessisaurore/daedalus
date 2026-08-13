@@ -1,5 +1,5 @@
 //! Panic handler
-//! 
+//!
 //! This either will loop, or TODO: platform specific method
 //! on debug feature enabled
 
