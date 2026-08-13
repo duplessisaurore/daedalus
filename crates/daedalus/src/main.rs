@@ -25,3 +25,10 @@ mod run;
 /// The capabilities we provide to the `Lepton3` vm
 /// for the bootloader programs.
 mod capabilities;
+
+/// Platform/configuration specific entry method into `Daedalus`
+/// from prior stages
+mod startup;
+
+/// Rust panic handling
+mod panic;

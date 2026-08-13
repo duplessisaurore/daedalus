@@ -21,4 +21,7 @@ daedalus_program = { workspace = true }
 
 [features]
 # Supported platforms
-zcu106 = ["daedalus_caps/zcu106"]
+
+# Xilinx
+zynqmp = ["daedalus_caps/zynqmp"]
+zcu106 = ["daedalus_caps/zcu106", "zynqmp"]
