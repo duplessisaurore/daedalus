@@ -25,13 +25,13 @@ const LINE_MASK: u64 = 0xf;
 const SCTLR_INSTRUCTION_CACHE: u64 = 1 << 12;
 
 /// This is the E2H bit of the `HCR_EL2` register
-/// 
-/// This enables a configuration where a Host Operating System is running at EL2, 
+///
+/// This enables a configuration where a Host Operating System is running at EL2,
 /// and the Host Operating System's applications are running at EL0. (VHE)
 const HCR_EL2_E2H: u64 = 1 << 34;
 
 /// This is the TGE bit of the `HCR_EL2` register
-/// 
+///
 /// This routes all exceptions from EL1 to EL2 if set to 1.
 const HCR_EL2_TGE: u64 = 1 << 27;
 
@@ -40,7 +40,6 @@ const HCR_EL2_TGE: u64 = 1 << 27;
 /// These are for `ARM 64-bit` platforms
 /// such as the ZCU106.
 pub struct Aarch64;
-
 
 /// Force a non-VHE EL2 configuration.
 ///
@@ -71,13 +70,13 @@ unsafe fn configure_hcr_el2() {
 }
 
 /// This will assert that the current ELx level is EL2.
-/// 
+///
 /// This upholds that `Daedalus` should always be running at EL2.
 fn assert_el2() {
     let current_el: u64;
 
-    // # Safety: 
-    // 
+    // # Safety:
+    //
     // `CurrentEL` is readable at every exception level.
     unsafe {
         core::arch::asm!("mrs {}, CurrentEL", out(reg) current_el, options(nomem, nostack));
@@ -85,7 +84,10 @@ fn assert_el2() {
 
     // CurrentEL holds the exception level in bits [3:2].
     let el = (current_el >> 2) & 0b11;
-    assert!(el == 2, "daedalus must run at EL2, instead it was running at EL{el}!");
+    assert!(
+        el == 2,
+        "daedalus must run at EL2, instead it was running at EL{el}!"
+    );
 }
 
 impl MemoryArch for Aarch64 {
@@ -226,10 +228,10 @@ impl MemoryArch for Aarch64 {
         // Assert that we are actually running at EL2 on aarch64, as this is expected
         assert_el2();
 
-        // Get rid of VHE, 
+        // Get rid of VHE,
         //
         // # Safety
-        // 
+        //
         // we've asserted we're in el2 and
         // this is at the top of memory setup which runs first.
         unsafe { configure_hcr_el2() };
