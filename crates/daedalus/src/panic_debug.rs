@@ -40,7 +40,7 @@ fn panic(info: &PanicInfo) -> ! {
 
     writeln!(
         message,
-        "\n\n=^..^=   =^..^=   =^..^=    ERROR!    =^..^=    =^..^=    =^..^=\n"
+        "\n\n\x1b[95m=^..^=   =^..^=   =^..^=    ERROR!    =^..^=    =^..^=    =^..^=\x1b[0m\n"
     )
     .ok();
     writeln!(message, "Message: {}", info.message()).ok();
@@ -60,7 +60,7 @@ fn panic(info: &PanicInfo) -> ! {
 
     writeln!(
         message,
-        "\n=^..^=   =^..^=   =^..^=    =^..^=    =^..^=    =^..^=    =^..^="
+        "\n\x1b[95m=^..^=   =^..^=   =^..^=    =^..^=    =^..^=    =^..^=    =^..^=\x1b[0m"
     )
     .ok();
 
