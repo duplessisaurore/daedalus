@@ -1,7 +1,7 @@
 //! Panic handler
 //!
-//! This either will loop, or TODO: platform specific method
-//! on debug feature enabled
+//! This is the simpler one which just aborts and loops,
+//! see `panic-debug`, the feature for a more comprehensive one.
 
 use core::panic::PanicInfo;
 

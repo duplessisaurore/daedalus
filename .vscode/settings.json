@@ -3,6 +3,6 @@
         "DAEDALUS_PROGRAMS": "/home/aurora/bootloader/test-mem/loader.toml,/home/aurora/bootloader/test-mem/verifier.toml",
         "DAEDALUS_TEMPLATE": "/home/aurora/bootloader/test-mem/template.toml"
     },
-    "rust-analyzer.cargo.features": ["platform-zcu106"],
+    "rust-analyzer.cargo.features": ["platform-zcu106", "panic-debug"],
     "rust-analyzer.cargo.target": "aarch64-unknown-none"
 }

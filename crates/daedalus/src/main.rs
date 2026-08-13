@@ -30,5 +30,13 @@ mod capabilities;
 /// from prior stages
 mod startup;
 
-/// Rust panic handling
-mod panic;
+cfg_if::cfg_if! {
+    // debug panic handler
+    if #[cfg(all(feature = "panic-debug"))] {
+        mod panic_debug;
+    } else {
+        // simple looping panic handler
+        mod panic;
+    }
+}
+

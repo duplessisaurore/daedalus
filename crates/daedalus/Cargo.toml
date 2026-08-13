@@ -20,6 +20,9 @@ daedalus_caps = { workspace = true }
 daedalus_program = { workspace = true }
 
 [features]
+# Panic debug, read very carefully before enabling!
+panic-debug = []
+
 # Supported platforms
 
 # Xilinx
