@@ -20,10 +20,10 @@ daedalus_program = { workspace = true }
 
 [features]
 # irq archs
-gicv2 = []
+irq-gicv2 = []
 
 # platforms
 
 # Xilinx
-zynqmp = ["gicv2"]
-zcu106 = ["zynqmp"]
+platform-zynqmp = ["irq-gicv2"]
+platform-zcu106 = ["platform-zynqmp"]
