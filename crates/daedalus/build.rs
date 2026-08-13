@@ -33,7 +33,7 @@ fn main() {
     let actual_linker_script = match all_valid_link_files.iter().collect::<Vec<_>>().as_slice() {
         [p] => *p,
         [] => panic!(
-            "\x1b[93mno platform was selected with a valid linker script under src/ld; select one or create one.\x1b[0m"
+            "\x1b[93mno platform was selected with a valid linker script under ld; select one or create one.\x1b[0m"
         ),
         many => panic!(
             "\x1b[93mplatform linker scripts are mutually exclusive. We can only have one enabled, got: {many:?}\x1b[0m"

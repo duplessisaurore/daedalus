@@ -5,7 +5,7 @@ use core::arch::global_asm;
 
 cfg_if::cfg_if! {
     // zynqmp, always the same startup regardless.
-    if #[cfg(all(target_arch = "aarch64", feature = "zynqmp"))] {
+    if #[cfg(all(target_arch = "aarch64", feature = "platform-zynqmp"))] {
         global_asm!(include_str!("../startup/zynqmp/startup.S"));
     } else {
         compile_error!("no target platform selected; enable an option (or add one if it doesn't exist!)");

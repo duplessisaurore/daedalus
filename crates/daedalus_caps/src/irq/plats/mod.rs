@@ -11,7 +11,7 @@ cfg_if::cfg_if! {
     //
     // each platform must export GIC_DISTRIBUTOR_BASE and GIC_CPU_INTERFACE_BASE
     // as usize consts.
-    if #[cfg(all(target_arch = "aarch64", feature = "gicv2", feature = "zynqmp"))] {
+    if #[cfg(all(target_arch = "aarch64", feature = "irq-gicv2", feature = "platform-zynqmp"))] {
         mod zynqmp;
         pub use zynqmp::GICD_BASE as GIC_DISTRIBUTOR_BASE;
         pub use zynqmp::GICC_BASE as GIC_CPU_INTERFACE_BASE;

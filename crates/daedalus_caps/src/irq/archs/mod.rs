@@ -7,7 +7,7 @@
 use daedalus_program::INTERRUPT_ARRAY;
 
 cfg_if::cfg_if! {
-    if #[cfg(all(target_arch = "aarch64", feature = "gicv2"))] {
+    if #[cfg(all(target_arch = "aarch64", feature = "irq-gicv2"))] {
         mod gicv2;
         pub use gicv2::GICv2 as TargetIRQArch;
     } else {

@@ -4,4 +4,5 @@
         "DAEDALUS_TEMPLATE": "/home/aurora/bootloader/test-mem/template.toml"
     },
     "rust-analyzer.cargo.features": ["platform-zcu106"],
+    "rust-analyzer.cargo.target": "aarch64-unknown-none"
 }
