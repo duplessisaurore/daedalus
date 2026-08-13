@@ -9,9 +9,6 @@ use crate::panic_debug::DaedalusDebugWriter;
 /// The base address of UART0 on the ZYNQMP platforms.
 const UART0_BASE: usize = 0xFF00_0000;
 
-/// The control registerr
-const UART_CR: usize = UART0_BASE;
-
 /// Status register, whether or not the UART0 can be written to.
 const UART_SR: usize = UART0_BASE + 0x2C;
 
@@ -73,10 +70,7 @@ impl DaedalusDebugWriter for Uart0 {
         Uart0 {}
     }
 
-    fn init(&mut self) {
-        // Reset TX and RX FIFOs
-        Self::write_reg(UART_CR, (1 << 1) | (1 << 0));
-    }
+    fn init(&mut self) {}
 }
 
 impl Write for Uart0 {
