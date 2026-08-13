@@ -1,6 +1,6 @@
 // startup.S
 //
-// `Daedalus` expects to be entered at EL1, in non-secure mode.
+// `Daedalus` expects to be entered at EL2, in non-secure mode.
 //
 
 .global _start

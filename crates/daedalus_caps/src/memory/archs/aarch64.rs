@@ -24,11 +24,69 @@ const LINE_MASK: u64 = 0xf;
 /// to 1 will enable the instruction cache.
 const SCTLR_INSTRUCTION_CACHE: u64 = 1 << 12;
 
+/// This is the E2H bit of the `HCR_EL2` register
+/// 
+/// This enables a configuration where a Host Operating System is running at EL2, 
+/// and the Host Operating System's applications are running at EL0. (VHE)
+const HCR_EL2_E2H: u64 = 1 << 34;
+
+/// This is the TGE bit of the `HCR_EL2` register
+/// 
+/// This routes all exceptions from EL1 to EL2 if set to 1.
+const HCR_EL2_TGE: u64 = 1 << 27;
+
 /// The `AArch64` memory operations
 ///
 /// These are for `ARM 64-bit` platforms
 /// such as the ZCU106.
 pub struct Aarch64;
+
+
+/// Force a non-VHE EL2 configuration.
+///
+/// We want to force VHE off, as else EL1 register accesses are
+/// redirected to their EL2 ones, which are bad because they have
+/// different formats!
+///
+/// # Safety
+///
+/// Must run at EL2, before any memory/interrupt setup.
+unsafe fn configure_hcr_el2() {
+    unsafe {
+        // Read current value to preserve fields.
+        let mut hcr: u64;
+        core::arch::asm!("mrs {}, hcr_el2", out(reg) hcr, options(nomem, nostack));
+
+        // Get rid of E2H and TGE from hcr_el2.
+        hcr &= !(HCR_EL2_E2H | HCR_EL2_TGE);
+
+        // Write back to update.
+        core::arch::asm!(
+            "msr hcr_el2, {hcr}",
+            "isb",
+            hcr = in(reg) hcr,
+            options(nomem, nostack, preserves_flags)
+        );
+    }
+}
+
+/// This will assert that the current ELx level is EL2.
+/// 
+/// This upholds that `Daedalus` should always be running at EL2.
+fn assert_el2() {
+    let current_el: u64;
+
+    // # Safety: 
+    // 
+    // `CurrentEL` is readable at every exception level.
+    unsafe {
+        core::arch::asm!("mrs {}, CurrentEL", out(reg) current_el, options(nomem, nostack));
+    }
+
+    // CurrentEL holds the exception level in bits [3:2].
+    let el = (current_el >> 2) & 0b11;
+    assert!(el == 2, "daedalus must run at EL2, instead it was running at EL{el}!");
+}
 
 impl MemoryArch for Aarch64 {
     unsafe fn read(pointer: *const u8, width: AccessWidth) -> u64 {
@@ -165,6 +223,17 @@ impl MemoryArch for Aarch64 {
     /// and then set the `I` field in `SCTLR_EL1` to enable the instruction cache such
     /// that our interpreter yoinking can be a lot faster execution wise.
     unsafe fn setup() {
+        // Assert that we are actually running at EL2 on aarch64, as this is expected
+        assert_el2();
+
+        // Get rid of VHE, 
+        //
+        // # Safety
+        // 
+        // we've asserted we're in el2 and
+        // this is at the top of memory setup which runs first.
+        unsafe { configure_hcr_el2() };
+
         // We assume that __dram_end is literally the end of memory, so we
         // invalidate up to then :)
         let end = (&raw const __dram_end) as usize;

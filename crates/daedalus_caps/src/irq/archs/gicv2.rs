@@ -612,7 +612,7 @@ unsafe fn line_count() -> u32 {
     ((it_lines + 1) * 32).min(FIRST_SPECIAL_INTERRUPT_ID)
 }
 
-/// Installs the exception vector table into `VBAR_EL1` (where
+/// Installs the exception vector table into `VBAR_EL2` (where
 /// da table should go nya~)
 ///
 /// # Safety
@@ -624,11 +624,11 @@ unsafe fn install_exception_vectors() {
 
     // SAFETY:
     //
-    // We are dropped off at `el1`, and `VBAR_EL1` is writeable
-    // at EL1.
+    // We are dropped off at `el2`, and `VBAR_EL2` is writeable
+    // at EL2.
     unsafe {
         core::arch::asm!(
-            "msr vbar_el1, {base}",
+            "msr vbar_el2, {base}",
             "isb",
             base = in(reg) base,
             options(nomem, nostack, preserves_flags)
@@ -697,18 +697,18 @@ pub extern "C" fn daedalus_unexpected_exception() {
 
     // # Safety
     //
-    // All of these registers are readable at EL1 and
+    // All of these registers are readable at EL2 and
     // we die after anyway so blah blah blah haha jonathan gas leak
     //
     // they just provide nice debug info so i dont pull my hair out too much.,
     unsafe {
-        core::arch::asm!("mrs {}, esr_el1", out(reg) syndrome, options(nomem, nostack));
-        core::arch::asm!("mrs {}, elr_el1", out(reg) link, options(nomem, nostack));
-        core::arch::asm!("mrs {}, far_el1", out(reg) fault_address, options(nomem, nostack));
+        core::arch::asm!("mrs {}, esr_el2", out(reg) syndrome, options(nomem, nostack));
+        core::arch::asm!("mrs {}, elr_el2", out(reg) link, options(nomem, nostack));
+        core::arch::asm!("mrs {}, far_el2", out(reg) fault_address, options(nomem, nostack));
     }
 
     panic!(
-        "daedalus got an unexpected exception: esr_el1={syndrome:#x} elr_el1={link:#x} far_el1={fault_address:#x}"
+        "daedalus got an unexpected exception: esr={syndrome:#x} elr={link:#x} far={fault_address:#x}"
     );
 }
 

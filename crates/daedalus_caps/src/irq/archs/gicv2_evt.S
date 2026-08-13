@@ -20,8 +20,8 @@
     stp x24, x25, [sp, #16 * 12]
     stp x26, x27, [sp, #16 * 13]
     stp x28, x29, [sp, #16 * 14]
-    mrs x0, elr_el1
-    mrs x1, spsr_el1
+    mrs x0, elr_el2
+    mrs x1, spsr_el2
     stp x30, x0,  [sp, #16 * 15]
     str x1,       [sp, #16 * 16]
 .endm
@@ -30,8 +30,8 @@
 .macro RESTORE_CONTEXT
     ldr x1,       [sp, #16 * 16]
     ldp x30, x0,  [sp, #16 * 15]
-    msr elr_el1, x0
-    msr spsr_el1, x1
+    msr elr_el2, x0
+    msr spsr_el2, x1
     ldp x28, x29, [sp, #16 * 14]
     ldp x26, x27, [sp, #16 * 13]
     ldp x24, x25, [sp, #16 * 12]
