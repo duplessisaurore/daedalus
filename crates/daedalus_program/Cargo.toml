@@ -19,9 +19,3 @@ lepton3 = { workspace = true }
 serde = { version = "1", features = ["derive"] }
 toml = "1"
 lepton3 = { workspace = true }
-
-
-[profile.release]
-# Try optimise harder for even better performance..
-codegen-units = 1
-lto = true
