@@ -9,6 +9,9 @@ use daedalus_caps::{
 
 use crate::{heap, run::run};
 
+#[cfg(feature = "extra-debug")]
+use crate::extra_debug;
+
 unsafe extern "C" {
     // This should be the extent of the .bss section
     static __bss_start: u8;
@@ -96,5 +99,9 @@ pub extern "C" fn rust_entry(_previous_stage_x0: u64) -> ! {
     // Initialise the heap, so we can use allocated structures
     // (lepton3 uses these heavily.)
     heap::initialise_heap();
+
+    #[cfg(feature = "extra-debug")]
+    extra_debug::debug_start();
+
     run();
 }

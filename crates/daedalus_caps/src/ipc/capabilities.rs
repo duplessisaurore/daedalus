@@ -126,9 +126,30 @@ fn advance_phase<H: HeapAllocator, T: TagGenerator>(
 ) -> Result<(), DaedalusCapErrors> {
     // Have we reached the end or not?
     //
-    // todo: handle result with end for jumping to the entry point for running LionsOS
-    let next_phase = get_phase(virtual_machine.capability_state.current_phase.next)
-        .ok_or(DaedalusCapErrors::EndOfPhases)?;
+    // The vm main run-loop handles EndOfPhases which pushes out the end arg address.
+    let next_phase = match get_phase(virtual_machine.capability_state.current_phase.next) {
+        Some(phase) => phase,
+        None => {
+            // Parse handoff address
+            let handoff_value =
+                entry_argument.ok_or(DaedalusCapErrors::StackUnderflowExpectedHandoffAddress)?;
+
+            let Value::UInt(raw_handoff_address) = handoff_value else {
+                return Err(DaedalusCapErrors::HandoffAddressExpected {
+                    found_type: value_type_name(&handoff_value),
+                });
+            };
+
+            // Turn into a usize which we jump to
+            let handoff_address = usize::try_from(raw_handoff_address).map_err(|_| {
+                DaedalusCapErrors::HandoffAddressTooLarge {
+                    uint_value: raw_handoff_address,
+                }
+            })?;
+
+            return Err(DaedalusCapErrors::EndOfPhases { handoff_address });
+        }
+    };
 
     // Name of the next program to start
     let name = next_phase.program.name;

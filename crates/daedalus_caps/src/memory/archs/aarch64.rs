@@ -28,7 +28,7 @@ const SCTLR_INSTRUCTION_CACHE: u64 = 1 << 12;
 ///
 /// This enables a configuration where a Host Operating System is running at EL2,
 /// and the Host Operating System's applications are running at EL0. (VHE)
-/// 
+///
 /// We don't want daedalus to be a VHE host.
 const HCR_EL2_E2H: u64 = 1 << 34;
 
@@ -54,7 +54,7 @@ pub struct Aarch64;
 /// We want to force VHE off, as else EL1 register accesses are
 /// redirected to their EL2 ones, which are bad because they have
 /// different formats!
-/// 
+///
 /// We also then set `HCR_EL2_IMO` such that physical IRQs get
 /// routed to EL2 and we can handle them.
 ///
@@ -290,7 +290,7 @@ impl MemoryArch for Aarch64 {
             // Read the current value out, as we only want to enable
             // the instruction cache
             core::arch::asm!(
-                "mrs {}, sctlr_el1",
+                "mrs {}, sctlr_el2",
                 out(reg) system_control,
                 options(nomem, nostack, preserves_flags)
             );
@@ -299,7 +299,7 @@ impl MemoryArch for Aarch64 {
             system_control |= SCTLR_INSTRUCTION_CACHE;
 
             core::arch::asm!(
-                "msr sctlr_el1, {}",
+                "msr sctlr_el2, {}",
                 "isb",
                 in(reg) system_control,
                 options(nostack, preserves_flags)

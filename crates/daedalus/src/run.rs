@@ -7,8 +7,10 @@ use core::fmt::Display;
 
 use alloc::boxed::Box;
 use daedalus_caps::{
+    errors::DaedalusCapErrors,
     ipc::capabilities::run_next_ready,
-    irq::{pending::pending_any, send_irqs},
+    irq::{arch::IrqArch, archs::TargetIRQArch, pending::pending_any, send_irqs},
+    memory::{arch::MemoryArch, archs::TargetMemoryArch},
     program::{DaedalusState, ProgramState},
 };
 use daedalus_program::{StaticDaedalusImageVariants, StaticSourceLocation};
@@ -17,6 +19,9 @@ use lepton3::{
     lepton_image::image_trait::{LeptonImage, LeptonSourceLocation},
     lepton_vm::virtual_machine::VmError,
 };
+
+#[cfg(feature = "extra-debug")]
+use crate::extra_debug;
 
 /// This is a wrapped VM Panic that bundles the corresponding
 /// image that panicked with the actual error itself,
@@ -29,7 +34,7 @@ pub struct VmPanic<'a> {
     pub image: &'a StaticDaedalusImageVariants,
 }
 
-use crate::capabilities;
+use crate::{capabilities, handoff::arch_handoff};
 
 /// This is the entry point to running the actual programs in `Daedalus`.
 ///
@@ -97,6 +102,18 @@ pub fn run() -> ! {
                 todo!()
             }
             Err(error) => {
+                // If we've hit end of phases, handoff to this address.
+                if let Some(handoff_address) = end_of_phases(&error) {
+                    // # Safety
+                    //
+                    // Single core, normal context, and nothing runs after this.
+                    unsafe {
+                        TargetIRQArch::teardown();
+                        TargetMemoryArch::teardown();
+                        handoff(handoff_address);
+                    }
+                }
+
                 // If we errored, capture a trace for better debug info in the lepton3 image itself.
                 let trace = vm.capture_trace();
                 panic!(
@@ -162,4 +179,40 @@ impl Display for VmPanic<'_> {
 
         Ok(())
     }
+}
+
+/// Is this error a `DaedalusCapErrors::EndOfPhase`?
+///
+/// If so then we should do a corresponding `handoff` to the address returned
+/// as Some() otherwise None
+fn end_of_phases(error: &VmError<'static, StaticSourceLocation>) -> Option<usize> {
+    match error {
+        VmError::CapabilityError(inner) => {
+            if let Some(DaedalusCapErrors::EndOfPhases { handoff_address }) =
+                inner.downcast_ref::<DaedalusCapErrors>()
+            {
+                return Some(*handoff_address);
+            }
+
+            None
+        }
+        _ => None,
+    }
+}
+
+/// Hands control to the payload staged at `address`.
+///
+/// # Safety
+///
+/// Must be the last thing Daedalus ever does.
+///
+/// All `Daedalus` IRQ's Memory etc. must be toredown
+unsafe fn handoff(address: usize) -> ! {
+    #[cfg(feature = "extra-debug")]
+    extra_debug::debug_handoff(address);
+
+    // # Safety
+    //
+    // Preconditions are preserved by this function's header.
+    unsafe { arch_handoff(address) };
 }

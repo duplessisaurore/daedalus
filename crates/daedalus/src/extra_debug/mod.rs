@@ -6,6 +6,45 @@
 use core::fmt::Write;
 use core::panic::PanicInfo;
 
+/// Prints a bunch of information about the current
+/// state of daedalus on start for debugging purposes.
+pub fn debug_start() {
+    // This is the debug writer which the fancy info will be printed through
+    let mut writer = DebugWriter::new();
+    writer.init();
+
+    writeln!(writer, "\n=^..^=  DAEDALUS DEBUG  =^..^=").ok();
+
+    writeln!(writer, "Daedalus Version: {}", env!("CARGO_PKG_VERSION"),).ok();
+
+    writeln!(
+        writer,
+        "Built for {} in {} mode",
+        env!("DAEDALUS_BUILD_TARGET"),
+        env!("DAEDALUS_BUILD_PROFILE"),
+    )
+    .ok();
+
+    writeln!(writer, "Build time: {}", env!("DAEDALUS_BUILD_TIME"),).ok();
+
+    writeln!(writer, "=^..^=  =^..^=  =^..^=  =^..^=\n").ok();
+}
+
+/// Prints a final barrier at the end of handoff for daedalus if the user
+/// programs have no output, for extra debug reasons
+pub fn debug_handoff(address: usize) {
+    // This is the debug writer which the fancy info will be printed through
+    let mut writer = DebugWriter::new();
+    writer.init();
+
+    writeln!(
+        writer,
+        "\n=^..^= DAEDALUS HANDOFF TO 0x{:x} =^..^=\n",
+        address
+    )
+    .ok();
+}
+
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     // This is the debug writer which the fancy panic will be printed through

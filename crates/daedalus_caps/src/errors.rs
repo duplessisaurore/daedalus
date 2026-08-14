@@ -25,7 +25,20 @@ pub enum DaedalusCapErrors {
     /// This will be handled by finishing the boot process
     /// and jumping to the entry point from the final program,
     /// see `finish`.
-    EndOfPhases,
+    EndOfPhases { handoff_address: usize },
+
+    /// The next phase is `end`, and we expect some address
+    /// to jump to, which will start the next image!
+    ///
+    /// However no address was found!
+    StackUnderflowExpectedHandoffAddress,
+
+    /// The next phase is `end`, and we expect some address
+    /// to jump to, but the provided address is not valid!
+    HandoffAddressExpected { found_type: &'static str },
+
+    /// The handoff address is too large to fit in a usize
+    HandoffAddressTooLarge { uint_value: u64 },
 
     /// The scheduler had nothing runnable that could be found
     /// when trying to run something next...
@@ -253,8 +266,11 @@ pub enum DaedalusCapErrors {
 impl Display for DaedalusCapErrors {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::EndOfPhases => {
-                write!(f, "daedalus reached the `end` of the boot phases!")
+            Self::EndOfPhases { handoff_address } => {
+                write!(
+                    f,
+                    "daedalus reached the `end` of the boot phases, this error shouldn't be thrown but instead we should jump to `{handoff_address}`!"
+                )
             }
 
             Self::CouldNotFindProgram {
@@ -577,6 +593,24 @@ impl Display for DaedalusCapErrors {
                 write!(
                     f,
                     "daedalus found an unexpected duplicate interrupt registration of interrupt with id `{interrupt_id}`, original program registered: `{original_program}`, new program attempting: `{new_program}`!"
+                )
+            }
+            Self::StackUnderflowExpectedHandoffAddress => {
+                write!(
+                    f,
+                    "daedalus expected to find a handoff address on the stack but nothing was found!"
+                )
+            }
+            Self::HandoffAddressExpected { found_type } => {
+                write!(
+                    f,
+                    "daedalus expected a handoff address as a UInt value that fits as an address on the platform, but instead found a `{found_type}`!"
+                )
+            }
+            Self::HandoffAddressTooLarge { uint_value } => {
+                write!(
+                    f,
+                    "daedalus expected a handoff address as a UInt value that fits as an address on the platform, but the address was too large! got `{uint_value}`!"
                 )
             }
         }

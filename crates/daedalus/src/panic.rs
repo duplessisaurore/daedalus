@@ -1,7 +1,7 @@
 //! Panic handler
 //!
 //! This is the simpler one which just aborts and loops,
-//! see `panic-debug`, the feature for a more comprehensive one.
+//! see `extra-debug`, the feature for a more comprehensive one.
 
 use core::panic::PanicInfo;
 

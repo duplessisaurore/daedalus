@@ -4,7 +4,7 @@
 
 use core::fmt::Write;
 
-use crate::panic_debug::DaedalusDebugWriter;
+use crate::extra_debug::DaedalusDebugWriter;
 
 /// The base address of UART0 on the ZYNQMP platforms.
 const UART0_BASE: usize = 0xFF00_0000;

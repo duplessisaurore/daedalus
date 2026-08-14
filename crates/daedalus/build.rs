@@ -2,7 +2,8 @@
 //! targetted for `Daedalus` and uses the corresponding linker script
 //! in the ld directory for that platform.
 
-use std::{collections::HashSet, env, fs, path::PathBuf};
+use chrono::{DateTime, Local};
+use std::{collections::HashSet, env, fs, path::PathBuf, time::SystemTime};
 
 fn main() {
     // Cargo inserts features as ENV also with CARGO_FEATURE_<FEATURE_NAME>,
@@ -50,4 +51,16 @@ fn main() {
     println!("cargo:rustc-link-arg=--nmagic");
     println!("cargo:rerun-if-changed={}", actual_linker_script.display());
     println!("cargo:rerun-if-changed=ld");
+
+    // debug info out for daedalus debug mode
+    let target = env::var("TARGET").unwrap_or_else(|_| "unknown-target".to_string());
+    let profile = env::var("PROFILE").unwrap_or_else(|_| "unknown-profile".to_string());
+
+    let build_time = SystemTime::now();
+    let build_datetime: DateTime<Local> = build_time.into();
+    let formatted_build_time = build_datetime.format("%A, %d %B %Y %H:%M:%S").to_string();
+
+    println!("cargo:rustc-env=DAEDALUS_BUILD_TARGET={target}");
+    println!("cargo:rustc-env=DAEDALUS_BUILD_PROFILE={profile}");
+    println!("cargo:rustc-env=DAEDALUS_BUILD_TIME={formatted_build_time}");
 }

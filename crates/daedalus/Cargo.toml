@@ -19,9 +19,12 @@ lepton3 = { workspace = true }
 daedalus_caps = { workspace = true }
 daedalus_program = { workspace = true }
 
+[build-dependencies]
+chrono = "0.4.45"
+
 [features]
 # Panic debug, read very carefully before enabling!
-panic-debug = []
+extra-debug = []
 
 # Supported platforms
 

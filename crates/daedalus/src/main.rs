@@ -30,10 +30,13 @@ mod capabilities;
 /// from prior stages
 mod startup;
 
+/// Architecture specific handoff mechanism to `LionsOS`
+mod handoff;
+
 cfg_if::cfg_if! {
     // debug panic handler
-    if #[cfg(all(feature = "panic-debug"))] {
-        mod panic_debug;
+    if #[cfg(feature = "extra-debug")] {
+        pub mod extra_debug;
     } else {
         // simple looping panic handler
         mod panic;
