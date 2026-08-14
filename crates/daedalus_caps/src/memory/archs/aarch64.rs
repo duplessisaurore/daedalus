@@ -28,12 +28,20 @@ const SCTLR_INSTRUCTION_CACHE: u64 = 1 << 12;
 ///
 /// This enables a configuration where a Host Operating System is running at EL2,
 /// and the Host Operating System's applications are running at EL0. (VHE)
+/// 
+/// We don't want daedalus to be a VHE host.
 const HCR_EL2_E2H: u64 = 1 << 34;
 
 /// This is the TGE bit of the `HCR_EL2` register
 ///
-/// This routes all exceptions from EL1 to EL2 if set to 1.
+/// This routes all exceptions from EL1 to EL2 if set to 1. (broad VHE exception trapping
+/// behaviour), which we don't really want or care for.
 const HCR_EL2_TGE: u64 = 1 << 27;
+
+/// This controls physical IRQ routing, we want to set this to 1
+/// when VHE is disabled so that physical IRQs are routed to EL2
+/// for our EVT to route them to `Daedalus`.
+const HCR_EL2_IMO: u64 = 1 << 4;
 
 /// The `AArch64` memory operations
 ///
@@ -46,6 +54,9 @@ pub struct Aarch64;
 /// We want to force VHE off, as else EL1 register accesses are
 /// redirected to their EL2 ones, which are bad because they have
 /// different formats!
+/// 
+/// We also then set `HCR_EL2_IMO` such that physical IRQs get
+/// routed to EL2 and we can handle them.
 ///
 /// # Safety
 ///
@@ -58,6 +69,9 @@ unsafe fn configure_hcr_el2() {
 
         // Get rid of E2H and TGE from hcr_el2.
         hcr &= !(HCR_EL2_E2H | HCR_EL2_TGE);
+
+        // Route physical IRQs to EL2 so we get them for our IRQ handling.
+        hcr |= HCR_EL2_IMO;
 
         // Write back to update.
         core::arch::asm!(
