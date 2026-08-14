@@ -20,7 +20,7 @@ const IMINLINE_SHIFT: u64 = 0;
 /// Mask for the actual line size for the IMINLINE/DMINLINE shifts
 const LINE_MASK: u64 = 0xf;
 
-/// This is the `I` flag of the `SCTLR_EL1` register, setting this
+/// This is the `I` flag of the `SCTLR_EL2` register, setting this
 /// to 1 will enable the instruction cache.
 const SCTLR_INSTRUCTION_CACHE: u64 = 1 << 12;
 
@@ -236,7 +236,7 @@ impl MemoryArch for Aarch64 {
     /// system as we don't know which ones have data left in them.
     ///
     /// We also flush the entirety of the instruction cache with `ic ialluis`
-    /// and then set the `I` field in `SCTLR_EL1` to enable the instruction cache such
+    /// and then set the `I` field in `SCTLR_EL2` to enable the instruction cache such
     /// that our interpreter yoinking can be a lot faster execution wise.
     unsafe fn setup() {
         // Assert that we are actually running at EL2 on aarch64, as this is expected
@@ -283,7 +283,7 @@ impl MemoryArch for Aarch64 {
             core::arch::asm!("isb", options(nostack, preserves_flags));
         }
 
-        // Enable instruction caching with `SCTLR_EL1`
+        // Enable instruction caching with `SCTLR_EL2`
         let mut system_control: u64;
 
         unsafe {
