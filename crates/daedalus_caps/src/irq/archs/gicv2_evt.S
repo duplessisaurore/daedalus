@@ -20,18 +20,48 @@
     stp x24, x25, [sp, #16 * 12]
     stp x26, x27, [sp, #16 * 13]
     stp x28, x29, [sp, #16 * 14]
+.endm
+
+// ELx specific context save, must run after SAVE_CONTEXT
+
+.macro SAVE_ELX_CONTEXT
+    mrs x0, CurrentEL
+    lsr x0, x0, #2
+    and x0, x0, #0x3
+
+    // el3
+    cmp x0, #3
+    b.eq 1f
+
+    // el2
+    cmp x0, #2
+    b.eq 2f
+
+    // otherwise assume el1
+    mrs x0, elr_el1
+    mrs x1, spsr_el1
+    stp x30, x0, [sp, #16 * 15]
+    str x1,      [sp, #16 * 16]
+    b 3f
+
+1:
+    mrs x0, elr_el3
+    mrs x1, spsr_el3
+    stp x30, x0, [sp, #16 * 15]
+    str x1,      [sp, #16 * 16]
+    b 3f
+
+2:
     mrs x0, elr_el2
     mrs x1, spsr_el2
-    stp x30, x0,  [sp, #16 * 15]
-    str x1,       [sp, #16 * 16]
+    stp x30, x0, [sp, #16 * 15]
+    str x1,      [sp, #16 * 16]
+
+3:
 .endm
 
 // Put back all registers from the stack
 .macro RESTORE_CONTEXT
-    ldr x1,       [sp, #16 * 16]
-    ldp x30, x0,  [sp, #16 * 15]
-    msr elr_el2, x0
-    msr spsr_el2, x1
     ldp x28, x29, [sp, #16 * 14]
     ldp x26, x27, [sp, #16 * 13]
     ldp x24, x25, [sp, #16 * 12]
@@ -49,6 +79,45 @@
     ldp x0,  x1,  [sp, #16 * 0]
     add sp, sp, #272
 .endm
+
+
+// ELx specific context restore, must run before RESTORE_CONTEXT
+
+.macro RESTORE_ELX_CONTEXT
+    mrs x0, CurrentEL
+    lsr x0, x0, #2
+    and x0, x0, #0x3
+
+    // el3
+    cmp x0, #3
+    b.eq 1f
+
+    // el2
+    cmp x0, #2
+    b.eq 2f
+
+    // otherwise assume el1
+    ldr x1, [sp, #16 * 16]
+    ldp x30, x0, [sp, #16 * 15]
+    msr elr_el1, x0
+    msr spsr_el1, x1
+    b 3f
+
+1:
+    ldr x1, [sp, #16 * 16]
+    ldp x30, x0, [sp, #16 * 15]
+    msr elr_el3, x0
+    msr spsr_el3, x1
+    b 3f
+
+2:
+    ldr x1, [sp, #16 * 16]
+    ldp x30, x0, [sp, #16 * 15]
+    msr elr_el2, x0
+    msr spsr_el2, x1
+3:
+.endm
+
 
 .section .text.vectors, "ax"
 
@@ -90,6 +159,10 @@ daedalus_vectors:
 // is restored so stuff works ^_^
 irq_entry:
     SAVE_CONTEXT
-    bl  daedalus_irq_handler
+    SAVE_ELX_CONTEXT
+
+    bl daedalus_irq_handler
+
+    RESTORE_ELX_CONTEXT
     RESTORE_CONTEXT
     eret

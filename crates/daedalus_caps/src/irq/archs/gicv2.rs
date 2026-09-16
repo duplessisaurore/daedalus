@@ -2,14 +2,16 @@
 //! for `aarch64`, specifically `GICv2` as the interrupt
 //! controller.
 
-use core::arch::global_asm;
+use core::{arch::global_asm, fmt::Display};
 
 use daedalus_program::{InterruptPriority, InterruptTrigger};
 
 use crate::irq::{
     arch::IrqArch,
     pending::record_pending_interrupt,
-    plats::{GIC_CPU_INTERFACE_BASE, GIC_DISTRIBUTOR_BASE},
+    plats::{
+        GIC_CPU_INTERFACE_BASE, GIC_CPU_INTERFACE_SIZE, GIC_DISTRIBUTOR_BASE, GIC_DISTRIBUTOR_SIZE,
+    },
 };
 
 // This is the exception vector table we need to install
@@ -170,12 +172,18 @@ pub struct GICInterruptPriority(u8);
 /// controller such as the ZCU106.
 pub struct GICv2;
 
+/// Error type for if a memory region
+/// tries to overlap with GICv2 MMIO area
+#[derive(Debug)]
+pub struct GICv2MemoryRegionOverlap;
+
 impl IrqArch for GICv2 {
     fn is_valid_irq_wrapper(id: u32) -> bool {
         Self::is_valid_irq(id)
     }
 
     type InterruptState = InterruptState;
+    type IrqMemoryOverlappedError = GICv2MemoryRegionOverlap;
 
     unsafe fn disable_interrupts() -> Self::InterruptState {
         // The DAIF is the state we need to preserve
@@ -323,6 +331,25 @@ impl IrqArch for GICv2 {
         unsafe {
             GICDRegisters::ISENABLER.write_interrupt_bit(interrupt_id);
         }
+    }
+
+    fn check_overlaps_irq_memory(
+        base: usize,
+        len: usize,
+    ) -> Result<(), Self::IrqMemoryOverlappedError> {
+        // Whether or not it overlaps with GICD
+        let is_gicd = base < (GIC_DISTRIBUTOR_BASE + GIC_DISTRIBUTOR_SIZE)
+            && GIC_DISTRIBUTOR_BASE < base.saturating_add(len);
+
+        // Whether or not it overlaps with GICC
+        let is_gicc = base < (GIC_CPU_INTERFACE_BASE + GIC_CPU_INTERFACE_SIZE)
+            && GIC_CPU_INTERFACE_BASE < base.saturating_add(len);
+
+        if is_gicd || is_gicc {
+            return Err(GICv2MemoryRegionOverlap);
+        }
+
+        Ok(())
     }
 }
 
@@ -612,7 +639,22 @@ unsafe fn line_count() -> u32 {
     ((it_lines + 1) * 32).min(FIRST_SPECIAL_INTERRUPT_ID)
 }
 
-/// Installs the exception vector table into `VBAR_EL2` (where
+/// Returns the CurrentEL level in aarch64
+fn read_current_el() -> u64 {
+    let current_el: u64;
+
+    // # Safety:
+    //
+    // `CurrentEL` is readable at every exception level.
+    unsafe {
+        core::arch::asm!("mrs {}, CurrentEL", out(reg) current_el, options(nomem, nostack));
+    }
+
+    // CurrentEL holds the exception level in bits [3:2].
+    (current_el >> 2) & 0b11
+}
+
+/// Installs the exception vector table into `VBAR_ELx` (where
 /// da table should go nya~)
 ///
 /// # Safety
@@ -622,17 +664,48 @@ unsafe fn line_count() -> u32 {
 unsafe fn install_exception_vectors() {
     let base = (&raw const daedalus_vectors) as usize;
 
-    // SAFETY:
-    //
-    // We are dropped off at `el2`, and `VBAR_EL2` is writeable
-    // at EL2.
-    unsafe {
-        core::arch::asm!(
-            "msr vbar_el2, {base}",
-            "isb",
-            base = in(reg) base,
-            options(nomem, nostack, preserves_flags)
-        );
+    // Install into a specific el levels exception table.
+    let el = read_current_el();
+
+    match el {
+        // SAFETY:
+        //
+        // We are dropped off at `el3`, and `VBAR_EL3` is writeable
+        // at EL3.
+        3 => unsafe {
+            core::arch::asm!(
+                "msr vbar_el3, {base}",
+                "isb",
+                base = in(reg) base,
+                options(nomem, nostack, preserves_flags)
+            );
+        },
+
+        // SAFETY:
+        //
+        // We are dropped off at `el2`, and `VBAR_EL2` is writeable
+        // at EL2.
+        2 => unsafe {
+            core::arch::asm!(
+                "msr vbar_el2, {base}",
+                "isb",
+                base = in(reg) base,
+                options(nomem, nostack, preserves_flags)
+            );
+        },
+
+        // SAFETY:
+        //
+        // We are dropped off at `el1`, and `VBAR_EL1` is writeable
+        // at EL1.
+        _ => unsafe {
+            core::arch::asm!(
+                "msr vbar_el1, {base}",
+                "isb",
+                base = in(reg) base,
+                options(nomem, nostack, preserves_flags)
+            );
+        },
     }
 }
 
@@ -695,16 +768,38 @@ pub extern "C" fn daedalus_unexpected_exception() {
     let link: u64;
     let fault_address: u64;
 
-    // # Safety
-    //
-    // All of these registers are readable at EL2 and
-    // we die after anyway so blah blah blah haha jonathan gas leak
-    //
-    // they just provide nice debug info so i dont pull my hair out too much.,
-    unsafe {
-        core::arch::asm!("mrs {}, esr_el2", out(reg) syndrome, options(nomem, nostack));
-        core::arch::asm!("mrs {}, elr_el2", out(reg) link, options(nomem, nostack));
-        core::arch::asm!("mrs {}, far_el2", out(reg) fault_address, options(nomem, nostack));
+    let el = read_current_el();
+
+    match el {
+        // # Safety
+        //
+        // All of these registers are readable at EL3 and
+        // we die after anyway so blah blah blah haha jonathan gas leak
+        //
+        // they just provide nice debug info so i dont pull my hair out too much.,
+        3 => unsafe {
+            core::arch::asm!("mrs {}, esr_el3", out(reg) syndrome, options(nomem, nostack));
+            core::arch::asm!("mrs {}, elr_el3", out(reg) link, options(nomem, nostack));
+            core::arch::asm!("mrs {}, far_el3", out(reg) fault_address, options(nomem, nostack));
+        },
+
+        // # Safety
+        //
+        // All of these registers are readable at EL2
+        2 => unsafe {
+            core::arch::asm!("mrs {}, esr_el2", out(reg) syndrome, options(nomem, nostack));
+            core::arch::asm!("mrs {}, elr_el2", out(reg) link, options(nomem, nostack));
+            core::arch::asm!("mrs {}, far_el2", out(reg) fault_address, options(nomem, nostack));
+        },
+
+        // # Safety
+        //
+        // All of these registers are readable at EL1
+        _ => unsafe {
+            core::arch::asm!("mrs {}, esr_el1", out(reg) syndrome, options(nomem, nostack));
+            core::arch::asm!("mrs {}, elr_el1", out(reg) link, options(nomem, nostack));
+            core::arch::asm!("mrs {}, far_el1", out(reg) fault_address, options(nomem, nostack));
+        },
     }
 
     panic!(
@@ -741,5 +836,14 @@ unsafe fn reset_interrupts() {
             // this is bcz the active prior is set
             GICDRegisters::ICACTIVER.write_interrupt_bit(interrupt_id);
         }
+    }
+}
+
+impl Display for GICv2MemoryRegionOverlap {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(
+            f,
+            "daedalus expected that memory regions would never overlap with GICv2 MMIO region"
+        )
     }
 }

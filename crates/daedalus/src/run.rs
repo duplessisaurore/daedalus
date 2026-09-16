@@ -48,7 +48,7 @@ pub fn run() -> ! {
     // Initialise the VM and `DaedalusState` which is our primary mode of operation.
     let mut tagger = TagGeneratorImpl::default();
     let state =
-        DaedalusState::new(entry_phase, &mut tagger).expect("first program's grants to resolve");
+        DaedalusState::new(entry_phase, &mut tagger).expect("first program's grants should properly resolve, instead found");
 
     // This will be our main vm, for program execution
     let mut vm = VirtualMachine::new(

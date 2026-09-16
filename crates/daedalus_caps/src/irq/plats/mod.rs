@@ -15,6 +15,8 @@ cfg_if::cfg_if! {
         mod zynqmp;
         pub use zynqmp::GICD_BASE as GIC_DISTRIBUTOR_BASE;
         pub use zynqmp::GICC_BASE as GIC_CPU_INTERFACE_BASE;
+        pub use zynqmp::GICD_SIZE as GIC_DISTRIBUTOR_SIZE;
+        pub use zynqmp::GICC_SIZE as GIC_CPU_INTERFACE_SIZE;
     } else {
         compile_error!("no target IRQ platform selected when IRQs were attempted to be used; enable an option (or add one if it doesn't exist!)");
     }

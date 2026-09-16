@@ -5,7 +5,10 @@ use daedalus_program::{Grant, GrantBase, GrantLen, RegionMemKind, RegionPermissi
 use hashbrown::HashMap;
 use lepton3::lepton_vm::{tagger::TagGenerator, values::Tag};
 
-use crate::errors::DaedalusCapErrors;
+use crate::{
+    errors::DaedalusCapErrors::{self, WritableOverIrqArch},
+    irq::{arch::IrqArch, archs::TargetIRQArch},
+};
 
 unsafe extern "C" {
     /// The starting point of daedalus in memory,
@@ -76,6 +79,10 @@ impl Region {
 
         if perms.contains(RegionPermissions::W) && overlaps_daedalus(base, len) {
             return Err(DaedalusCapErrors::WritableOverDaedalus { base, len });
+        }
+
+        if let Err(overlap_err) = <TargetIRQArch as IrqArch>::check_overlaps_irq_memory(base, len) {
+            return Err(WritableOverIrqArch(overlap_err));
         }
 
         Ok(Region {

@@ -7,7 +7,11 @@ use core::{error::Error, fmt::Display};
 use alloc::string::String;
 use daedalus_program::{InvalidRegionPermissionBitsError, RegionPermissions};
 
-use crate::{irq::IrqHandle, memory::RegionHandle, program::CallTag};
+use crate::{
+    irq::{IrqHandle, arch::IrqArch, archs::TargetIRQArch},
+    memory::RegionHandle,
+    program::CallTag,
+};
 
 #[derive(Debug)]
 pub enum DaedalusCapErrors {
@@ -97,6 +101,10 @@ pub enum DaedalusCapErrors {
     /// This region is attempting to be created in a location in which it
     /// would write over the memory of daedalus, and is not allowed.
     WritableOverDaedalus { base: usize, len: usize },
+
+    /// This region is attempting to be created in a location in which it
+    /// would write over the memory of the irq arch, and is not allowed.
+    WritableOverIrqArch(<TargetIRQArch as IrqArch>::IrqMemoryOverlappedError),
 
     /// Attempted to access a region with a permissions
     /// mismatch between the attempted access and the region's
@@ -613,6 +621,10 @@ impl Display for DaedalusCapErrors {
                     "daedalus expected a handoff address as a UInt value that fits as an address on the platform, but the address was too large! got `{uint_value}`!"
                 )
             }
+            Self::WritableOverIrqArch(underlying_error) => write!(
+                f,
+                "daedalus expected that regions would never overlap with irq arch, instead found `{underlying_error}`!"
+            ),
         }
     }
 }

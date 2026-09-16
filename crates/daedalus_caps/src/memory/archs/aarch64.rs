@@ -20,7 +20,7 @@ const IMINLINE_SHIFT: u64 = 0;
 /// Mask for the actual line size for the IMINLINE/DMINLINE shifts
 const LINE_MASK: u64 = 0xf;
 
-/// This is the `I` flag of the `SCTLR_EL2` register, setting this
+/// This is the `I` flag of the `SCTLR_ELx` registers, setting this
 /// to 1 will enable the instruction cache.
 const SCTLR_INSTRUCTION_CACHE: u64 = 1 << 12;
 
@@ -83,10 +83,8 @@ unsafe fn configure_hcr_el2() {
     }
 }
 
-/// This will assert that the current ELx level is EL2.
-///
-/// This upholds that `Daedalus` should always be running at EL2.
-fn assert_el2() {
+/// Returns the CurrentEL level in aarch64
+fn read_current_el() -> u64 {
     let current_el: u64;
 
     // # Safety:
@@ -97,11 +95,99 @@ fn assert_el2() {
     }
 
     // CurrentEL holds the exception level in bits [3:2].
-    let el = (current_el >> 2) & 0b11;
-    assert!(
-        el == 2,
-        "daedalus must run at EL2, instead it was running at EL{el}!"
-    );
+    (current_el >> 2) & 0b11
+}
+
+/// This will run a special routine based on the current ELx level.
+///
+/// This will only permit the specifically allowed daedalus ELx levels.
+fn assert_elx() {
+    let current_el: u64 = read_current_el();
+
+    match current_el {
+        2 => {
+            // Get rid of VHE,
+            //
+            // # Safety
+            //
+            // we've asserted we're in el2 and
+            // this is at the top of memory setup which runs first.
+            unsafe { configure_hcr_el2() };
+        }
+
+        // Nothing to do at EL1
+        1 => {}
+
+        _ => panic!("daedalus must run at EL2 or EL1, instead it was running at EL{current_el}!"),
+    }
+}
+
+fn set_sctlr_elx_icache() {
+    // Enable instruction caching with `SCTLR_ELx`
+    let mut system_control: u64;
+
+    // The specific register needs to be set based on current_el
+    let current_el: u64 = read_current_el();
+
+    match current_el {
+        3 => unsafe {
+            // Read the current value out, as we only want to enable
+            // the instruction cache
+            core::arch::asm!(
+                "mrs {}, sctlr_el3",
+                out(reg) system_control,
+                options(nomem, nostack, preserves_flags)
+            );
+        },
+
+        2 => unsafe {
+            core::arch::asm!(
+                "mrs {}, sctlr_el2",
+                out(reg) system_control,
+                options(nomem, nostack, preserves_flags)
+            );
+        },
+
+        _ => unsafe {
+            core::arch::asm!(
+                "mrs {}, sctlr_el1",
+                out(reg) system_control,
+                options(nomem, nostack, preserves_flags)
+            );
+        },
+    }
+
+    // Set flag and write back
+    system_control |= SCTLR_INSTRUCTION_CACHE;
+
+    match current_el {
+        3 => unsafe {
+            core::arch::asm!(
+                "msr sctlr_el3, {}",
+                "isb",
+                in(reg) system_control,
+                options(nostack, preserves_flags)
+            );
+        },
+
+        2 => unsafe {
+            core::arch::asm!(
+                "msr sctlr_el2, {}",
+                "isb",
+                in(reg) system_control,
+                options(nostack, preserves_flags)
+            );
+        },
+
+        _ => unsafe {
+            core::arch::asm!(
+                "msr sctlr_el1, {}",
+                "isb",
+                in(reg) system_control,
+                options(nostack, preserves_flags)
+            );
+        },
+    }
 }
 
 impl MemoryArch for Aarch64 {
@@ -236,19 +322,11 @@ impl MemoryArch for Aarch64 {
     /// system as we don't know which ones have data left in them.
     ///
     /// We also flush the entirety of the instruction cache with `ic ialluis`
-    /// and then set the `I` field in `SCTLR_EL2` to enable the instruction cache such
+    /// and then set the `I` field in `SCTLR_ELx` to enable the instruction cache such
     /// that our interpreter yoinking can be a lot faster execution wise.
     unsafe fn setup() {
-        // Assert that we are actually running at EL2 on aarch64, as this is expected
-        assert_el2();
-
-        // Get rid of VHE,
-        //
-        // # Safety
-        //
-        // we've asserted we're in el2 and
-        // this is at the top of memory setup which runs first.
-        unsafe { configure_hcr_el2() };
+        // Assert that we are actually running at a valid ELx on aarch64
+        assert_elx();
 
         // We assume that __dram_end is literally the end of memory, so we
         // invalidate up to then :)
@@ -283,28 +361,8 @@ impl MemoryArch for Aarch64 {
             core::arch::asm!("isb", options(nostack, preserves_flags));
         }
 
-        // Enable instruction caching with `SCTLR_EL2`
-        let mut system_control: u64;
-
-        unsafe {
-            // Read the current value out, as we only want to enable
-            // the instruction cache
-            core::arch::asm!(
-                "mrs {}, sctlr_el2",
-                out(reg) system_control,
-                options(nomem, nostack, preserves_flags)
-            );
-
-            // Set flag and write back
-            system_control |= SCTLR_INSTRUCTION_CACHE;
-
-            core::arch::asm!(
-                "msr sctlr_el2, {}",
-                "isb",
-                in(reg) system_control,
-                options(nostack, preserves_flags)
-            );
-        }
+        // Set icache to be active for faster performance.
+        set_sctlr_elx_icache();
     }
 
     /// Idk lol leave everything from setup 😂😂😂😂😂😂😂😂😂

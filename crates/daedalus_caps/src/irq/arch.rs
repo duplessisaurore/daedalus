@@ -3,6 +3,8 @@
 //! to inherently implement the IRQ operations
 //! on that architecture.
 
+use core::fmt::{Debug, Display};
+
 use daedalus_program::{InterruptPriority, InterruptTrigger};
 
 /// A single architecture's IRQ operations
@@ -19,6 +21,10 @@ pub trait IrqArch {
     /// interrupt state saved from `disable_interrupts`
     /// which can be restored to with `restore_interrupts`
     type InterruptState;
+
+    /// This is the type returned on error for the
+    /// `check_overlaps_irq_memory` function.
+    type IrqMemoryOverlappedError: Debug + Display;
 
     /// Set up the interrupts on this architecture
     ///
@@ -161,4 +167,17 @@ pub trait IrqArch {
     /// This assumes that the caller will properly have passed
     /// the `InterruptState` produced from a `disable_interrupts`.
     unsafe fn restore_interrupts(state: Self::InterruptState);
+
+    /// This function takes a base address and a length off that
+    /// base address as some access.
+    ///
+    /// This refers to a normal memory access done by some Daedalus
+    /// program, the goal of this implementation is then if this IRQ
+    /// arch defines say a memory mapped region for communicating with the
+    /// IRQ controller, a memory access through the memory system should
+    /// be rejected (by returning the error type).
+    fn check_overlaps_irq_memory(
+        base: usize,
+        len: usize,
+    ) -> Result<(), Self::IrqMemoryOverlappedError>;
 }
