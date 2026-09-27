@@ -583,6 +583,9 @@ pub fn cap_mem_fill<H: HeapAllocator, T: TagGenerator>(
 ///
 /// This essentially clears the `d-cache`, `i-cache` and instruction pipeline.
 ///
+/// This is also a memory barrier, all previous memory operations are guaranteed
+/// to have executed (including this flush) before any following memory operations.
+///
 pub fn cap_mem_flush<H: HeapAllocator, T: TagGenerator>(
     virtual_machine: &mut DaedalusVm<H, T>,
 ) -> Result<(), Box<dyn Error>> {
