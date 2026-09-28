@@ -1,0 +1,226 @@
+// daedalus.b3
+//
+// This file contains all of the `Daedalus` capabilities as macros.
+//
+// Prefer using this to raw capability calls as it is easier to port
+// on breaking major versions by linking to this
+//
+// This library has no dependencies and may be used anywhere.
+
+@namespace daedalus
+
+// IPC
+@capability cap_block_call 0
+@capability cap_block_recv 1
+@capability cap_caller_of 2
+@capability cap_finish 3
+@capability cap_is_replyable_tag 4
+@capability cap_non_block_call 5
+@capability cap_non_block_reply 6
+@capability cap_yield_now 7
+
+// Memory
+@capability cap_mem_grant 8
+@capability cap_mem_derive 9
+@capability cap_mem_release 10
+@capability cap_mem_base 11
+@capability cap_mem_len 12
+@capability cap_mem_read 13
+@capability cap_mem_write 14
+@capability cap_is_region_handle 15
+@capability cap_mem_copy 16
+@capability cap_mem_fill 17
+@capability cap_mem_flush 18
+
+// Irq
+@capability cap_is_irq_handle 19
+@capability cap_irq_release 20
+@capability cap_irq_ack 21
+@capability cap_irq_register 22
+
+// = IPC = //
+
+// ## ipc::block_call <arg> <name>
+@macro ipc::block_call (arg, name)
+    $name
+    $arg
+    call.cap cap_block_call
+@end
+
+
+// ## ipc::block_recv
+//
+// returns: [<top> `arg`, `call_tag`]
+@macro ipc::block_recv ()
+    call.cap cap_block_recv
+@end
+
+// ## ipc::caller_of <call_tag>
+//
+// returns: [<top> `name`]
+@macro ipc::caller_of (call_tag)
+    $call_tag
+    call.cap cap_caller_of
+@end
+
+// ## ipc::finish <arg>
+@macro ipc::finish (arg)
+    $arg
+    call.cap cap_finish
+@end
+
+// ## ipc::is_replyable_tag <call_tag>
+//
+// returns: [<top> `is_replyable_tag`]
+@macro ipc::is_replyable_tag (call_tag)
+    $call_tag
+    call.cap cap_is_replyable_tag
+@end
+
+// ## ipc::non_block_call <arg> <name>
+//
+// returns: [<top> `call_tag`]
+@macro ipc::non_block_call (arg, name)
+    $name
+    $arg
+    call.cap cap_non_block_call
+@end
+
+// ## ipc::non_block_reply <ret_arg> <call_tag>
+@macro ipc::non_block_reply (ret_arg, call_tag)
+    $call_tag
+    $ret_arg
+    call.cap cap_non_block_reply
+@end
+
+// ## ipc::yield_now
+@macro ipc::yield_now ()
+    call.cap cap_yield_now
+@end
+
+// = MEMORY = //
+
+// ## mem::mem_grant <role>
+//
+// returns: [<top> `region`]
+@macro mem::mem_grant (role)
+    $role
+    call.cap cap_mem_grant
+@end
+
+// ## mem::mem_derive <permissions> <len> <offset> <region>
+//
+// returns: [<top> `region`]
+@macro mem::mem_derive (permissions, len, offset, region)
+    $region
+    $offset
+    $len
+    $permissions
+    call.cap cap_mem_derive
+@end
+
+// ## mem::mem_release <region>
+@macro mem::mem_release (region)
+    $region
+    call.cap cap_mem_release
+@end
+
+// ## mem::mem_base <region>
+//
+// returns: [<top> `base`]
+@macro mem::mem_base (region)
+    $region
+    call.cap cap_mem_base
+@end
+
+// ## mem::mem_len <region>
+//
+// returns: [<top> `length`]
+@macro mem::mem_len (region)
+    $region
+    call.cap cap_mem_len
+@end
+
+// ## mem::mem_read <width> <offset> <region>
+//
+// returns: [<top> `value`]
+@macro mem::mem_read (width, offset, region)
+    $region
+    $offset
+    $width
+    call.cap cap_mem_read
+@end
+
+// ## mem::mem_write <value> <width> <offset> <region>
+@macro mem::mem_write (value, width, offset, region)
+    $region
+    $offset
+    $width
+    $value
+    call.cap cap_mem_write
+@end
+
+// ## mem::is_region_handle <region>
+//
+// returns: [<top> `is_region_handle`]
+@macro mem::is_region_handle (region)
+    $region
+    call.cap cap_is_region_handle
+@end
+
+// ## mem::mem_copy <len> <src_offset> <src_region> <dst_offset> <dst_region>
+@macro mem::mem_copy (len, src_offset, src_region, dst_offset, dst_region)
+    $dst_region
+    $dst_offset
+    $src_region
+    $src_offset
+    $len
+    call.cap cap_mem_copy
+@end
+
+// ## mem::mem_fill <len> <value> <offset> <region>
+@macro mem::mem_fill (len, value, offset, region)
+    $region
+    $offset
+    $value
+    $len
+    call.cap cap_mem_fill
+@end
+
+// ## mem::mem_flush <len> <offset> <region>
+@macro mem::mem_flush (len, offset, region)
+    $region
+    $offset
+    $len
+    call.cap cap_mem_flush
+@end
+
+// = IRQ = //
+
+// ## irq::is_irq_handle <irq>
+//
+// returns: [<top> `is_irq_handle`]
+@macro irq::is_irq_handle (irq)
+    $irq
+    call.cap cap_is_irq_handle
+@end
+
+// ## irq::irq_release <irq>
+@macro irq::irq_release (irq)
+    $irq
+    call.cap cap_irq_release
+@end
+
+// ## irq::irq_ack <irq>
+@macro irq::irq_ack (irq)
+    $irq
+    call.cap cap_irq_ack
+@end
+
+// ## irq::irq_register <interrupt_id>
+//
+// returns: [<top> `irq`]
+@macro irq::irq_register (interrupt_id)
+    $interrupt_id
+    call.cap cap_irq_register
+@end
