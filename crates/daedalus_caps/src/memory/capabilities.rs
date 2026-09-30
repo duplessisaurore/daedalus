@@ -31,8 +31,7 @@ fn pop_region_handle<H: HeapAllocator, T: TagGenerator>(
     virtual_machine: &mut DaedalusVm<H, T>,
 ) -> Result<RegionHandle, DaedalusCapErrors> {
     let value = virtual_machine
-        .stack
-        .pop()
+        .pop_maybe()
         .ok_or(DaedalusCapErrors::StackUnderflowExpectedRegionHandle)?;
 
     match value {
@@ -67,8 +66,7 @@ fn pop_region_length<H: HeapAllocator, T: TagGenerator>(
     virtual_machine: &mut DaedalusVm<H, T>,
 ) -> Result<usize, DaedalusCapErrors> {
     let value = virtual_machine
-        .stack
-        .pop()
+        .pop_maybe()
         .ok_or(DaedalusCapErrors::StackUnderflowExpectedRegionAccessDeriveLength)?;
 
     match value {
@@ -92,8 +90,7 @@ fn pop_region_offset<H: HeapAllocator, T: TagGenerator>(
     virtual_machine: &mut DaedalusVm<H, T>,
 ) -> Result<usize, DaedalusCapErrors> {
     let value = virtual_machine
-        .stack
-        .pop()
+        .pop_maybe()
         .ok_or(DaedalusCapErrors::StackUnderflowExpectedRegionAccessDeriveOffset)?;
 
     match value {
@@ -117,8 +114,7 @@ fn pop_access_width<H: HeapAllocator, T: TagGenerator>(
     virtual_machine: &mut DaedalusVm<H, T>,
 ) -> Result<AccessWidth, DaedalusCapErrors> {
     let value = virtual_machine
-        .stack
-        .pop()
+        .pop_maybe()
         .ok_or(DaedalusCapErrors::StackUnderflowExpectedAccessWidth)?;
 
     match value {
@@ -154,8 +150,7 @@ pub fn cap_mem_grant<H: HeapAllocator, T: TagGenerator>(
     virtual_machine: &mut DaedalusVm<H, T>,
 ) -> Result<(), Box<dyn Error>> {
     let name_value = virtual_machine
-        .stack
-        .pop()
+        .pop_maybe()
         .ok_or(DaedalusCapErrors::StackUnderflowExpectedGrantRole)?;
 
     // A string is always an array of UInt's
@@ -216,8 +211,7 @@ pub fn cap_mem_derive<H: HeapAllocator, T: TagGenerator>(
 ) -> Result<(), Box<dyn Error>> {
     // Pop permissions value off else error
     let perms_value = virtual_machine
-        .stack
-        .pop()
+        .pop_maybe()
         .ok_or(DaedalusCapErrors::StackUnderflowExpectedRegionPermissions)?;
 
     // Turn into a RegionPermissions or be angry.
@@ -396,8 +390,7 @@ pub fn cap_mem_write<H: HeapAllocator, T: TagGenerator>(
 ) -> Result<(), Box<dyn Error>> {
     // Grab the UInt value we are writing out
     let value = virtual_machine
-        .stack
-        .pop()
+        .pop_maybe()
         .ok_or(DaedalusCapErrors::StackUnderflowExpectedWriteValue)?;
 
     let Value::UInt(uint_write_out_value) = value else {
@@ -527,8 +520,7 @@ pub fn cap_mem_fill<H: HeapAllocator, T: TagGenerator>(
 
     // The fill value as a byte.
     let value = virtual_machine
-        .stack
-        .pop()
+        .pop_maybe()
         .ok_or(DaedalusCapErrors::StackUnderflowExpectedWriteValue)?;
 
     let Value::UInt(fill_value) = value else {

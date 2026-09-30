@@ -301,12 +301,10 @@ fn send_request<H: HeapAllocator, T: TagGenerator>(
     virtual_machine: &mut DaedalusVm<H, T>,
 ) -> Result<CallTag, DaedalusCapErrors> {
     let argument = virtual_machine
-        .stack
-        .pop()
+        .pop_maybe()
         .ok_or(DaedalusCapErrors::StackUnderflowExpectedMessageArgPayload)?;
     let name_value = virtual_machine
-        .stack
-        .pop()
+        .pop_maybe()
         .ok_or(DaedalusCapErrors::StackUnderflowExpectedProgramName)?;
 
     // Find the destination program spec/embedded from the value..
@@ -407,8 +405,7 @@ pub fn cap_finish<H: HeapAllocator, T: TagGenerator>(
     // TODO: on end phase, use this as address to jump to, to start the actual
     // OS
     let argument = virtual_machine
-        .stack
-        .pop()
+        .pop_maybe()
         .ok_or(DaedalusCapErrors::StackUnderflowFinishArg)?;
 
     // Get to the next phase
@@ -578,12 +575,10 @@ pub fn cap_non_block_reply<H: HeapAllocator, T: TagGenerator>(
     virtual_machine: &mut DaedalusVm<H, T>,
 ) -> Result<(), Box<dyn Error>> {
     let reply = virtual_machine
-        .stack
-        .pop()
+        .pop_maybe()
         .ok_or(DaedalusCapErrors::StackUnderflowExpectedMessageArgPayload)?;
     let tag_value = virtual_machine
-        .stack
-        .pop()
+        .pop_maybe()
         .ok_or(DaedalusCapErrors::StackUnderflowExpectedCallTag)?;
 
     // A tag value should be here!
@@ -680,8 +675,7 @@ pub fn cap_is_replyable_tag<H: HeapAllocator, T: TagGenerator>(
     virtual_machine: &mut DaedalusVm<H, T>,
 ) -> Result<(), Box<dyn Error>> {
     let tag_value = virtual_machine
-        .stack
-        .pop()
+        .pop_maybe()
         .ok_or(DaedalusCapErrors::StackUnderflowExpectedCallTag)?;
 
     // Make sure it's a tag and in the current pending replies
@@ -714,8 +708,7 @@ pub fn cap_caller_of<H: HeapAllocator, T: TagGenerator>(
     virtual_machine: &mut DaedalusVm<H, T>,
 ) -> Result<(), Box<dyn Error>> {
     let tag_value = virtual_machine
-        .stack
-        .pop()
+        .pop_maybe()
         .ok_or(DaedalusCapErrors::StackUnderflowExpectedCallTag)?;
 
     let Value::Tag(tag) = tag_value else {

@@ -28,8 +28,7 @@ fn pop_interrupt_number<H: HeapAllocator, T: TagGenerator>(
 ) -> Result<u32, DaedalusCapErrors> {
     // same stuff as `cap_is_irq_handle`.
     let value = virtual_machine
-        .stack
-        .pop()
+        .pop_maybe()
         .ok_or(DaedalusCapErrors::StackUnderflowExpectedIrqHandle)?;
 
     let Value::Tag(tag) = value else {
@@ -69,8 +68,7 @@ pub fn cap_is_irq_handle<H: HeapAllocator, T: TagGenerator>(
     virtual_machine: &mut DaedalusVm<H, T>,
 ) -> Result<(), Box<dyn Error>> {
     let value = virtual_machine
-        .stack
-        .pop()
+        .pop_maybe()
         .ok_or(DaedalusCapErrors::StackUnderflowExpectedIrqHandle)?;
 
     // Make sure it's a tag
@@ -178,8 +176,7 @@ pub fn cap_irq_register<H: HeapAllocator, T: TagGenerator>(
 ) -> Result<(), Box<dyn Error>> {
     // Get the interrupt id we are trying to bind to
     let value = virtual_machine
-        .stack
-        .pop()
+        .pop_maybe()
         .ok_or(DaedalusCapErrors::StackUnderflowExpectedInterruptId)?;
 
     let Value::UInt(raw) = value else {

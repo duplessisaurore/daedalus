@@ -41,6 +41,8 @@
 // = IPC = //
 
 // ## ipc::block_call <arg> <name>
+//
+// returns: [<top> `ret_arg`, `call_tag`]
 @macro ipc::block_call (arg, name)
     $name
     $arg
