@@ -7,7 +7,7 @@
 //
 // This library has no dependencies and may be used anywhere.
 
-@namespace daedalus
+@namespace daedalus_inner
 
 // IPC
 @capability cap_block_call 0

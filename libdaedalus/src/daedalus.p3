@@ -1,0 +1,223 @@
+// daedalus.p3
+//
+// Photon3 function wrappers for daedalus macros
+
+@namespace daedalus
+
+@requires std
+@requires std::string
+@requires daedalus_inner
+
+@object RegionHandle (handle: Tag)
+@object IrqHandle (handle: Tag)
+
+// can be unit in case of irq notifications to a program
+@object CallerHandle (handle: Any)
+
+// recieved ipc value
+@object IPCReturn (value: Any, tag: CallerHandle)
+
+// = IPC = //
+
+@fn block_call(arg: Any, name: String) -> IPCReturn
+    let name_bytes = name
+
+    b3<Void> {
+        !daedalus_inner::ipc::block_call
+            { !std::get arg }
+            { !std::get name_bytes }
+
+        @local ret_arg
+        store.local ret_arg
+
+        @local call_tag
+        store.local call_tag
+    }
+
+    return IPCReturn(b3<Any> {
+        !std::get ret_arg
+    }, CallerHandle(b3<Any> {
+        !std::get call_tag
+    }))
+
+@fn block_recv() -> IPCReturn
+    b3<Void> {
+        !daedalus_inner::ipc::block_recv
+
+        @local ret_arg
+        store.local ret_arg
+
+        @local call_tag
+        store.local call_tag
+    }
+
+    return IPCReturn(b3<Any> {
+        !std::get ret_arg
+    }, CallerHandle(b3<Any> {
+        !std::get call_tag
+    }))
+
+@fn caller_of(call_tag: CallerHandle) -> String
+    let tag = call_tag.handle
+    return b3<Array> {
+        !daedalus_inner::ipc::caller_of { !std::get tag }
+    } as String
+
+@fn finish(arg: Any) -> Void
+    b3<Void> {
+        !daedalus_inner::ipc::finish { !std::get arg }
+    }
+    return
+
+@fn is_replyable_tag(call_tag: CallerHandle) -> Bool
+    let tag = call_tag.handle
+    return b3<Bool> {
+        !daedalus_inner::ipc::is_replyable_tag { !std::get tag }
+    }
+
+@fn non_block_call(arg: Any, name: String) -> CallerHandle
+    let name_bytes = name
+    return CallerHandle(b3<Tag> {
+        !daedalus_inner::ipc::non_block_call
+            { !std::get arg }
+            { !std::get name_bytes }
+    })
+
+@fn non_block_reply(ret_arg: Any, call_tag: CallerHandle) -> Void
+    let tag = call_tag.handle
+    b3<Void> {
+        !daedalus_inner::ipc::non_block_reply
+            { !std::get ret_arg }
+            { !std::get tag }
+    }
+    return
+
+@fn yield_now() -> Void
+    b3<Void> {
+        !daedalus_inner::ipc::yield_now
+    }
+    return
+
+// = MEMORY = //
+
+@fn mem_grant(role: String) -> RegionHandle
+    let role_bytes = role
+    return RegionHandle(b3<Tag> {
+        !daedalus_inner::mem::mem_grant { !std::get role_bytes }
+    })
+
+@fn mem_derive(permissions: UInt, len: UInt, offset: UInt, region: RegionHandle) -> RegionHandle
+    let handle = region.handle
+    return RegionHandle(b3<Tag> {
+        !daedalus_inner::mem::mem_derive
+            { !std::get permissions }
+            { !std::get len }
+            { !std::get offset }
+            { !std::get handle }
+    })
+
+@fn mem_release(region: RegionHandle) -> Void
+    let handle = region.handle
+    b3<Void> {
+        !daedalus_inner::mem::mem_release { !std::get handle }
+    }
+    return
+
+@fn mem_base(region: RegionHandle) -> UInt
+    let handle = region.handle
+    return b3<UInt> {
+        !daedalus_inner::mem::mem_base { !std::get handle }
+    }
+
+@fn mem_len(region: RegionHandle) -> UInt
+    let handle = region.handle
+    return b3<UInt> {
+        !daedalus_inner::mem::mem_len { !std::get handle }
+    }
+
+@fn mem_read(width: UInt, offset: UInt, region: RegionHandle) -> UInt
+    let handle = region.handle
+    return b3<UInt> {
+        !daedalus_inner::mem::mem_read
+            { !std::get width }
+            { !std::get offset }
+            { !std::get handle }
+    }
+
+@fn mem_write(value: UInt, width: UInt, offset: UInt, region: RegionHandle) -> Void
+    let handle = region.handle
+    b3<Void> {
+        !daedalus_inner::mem::mem_write
+            { !std::get value }
+            { !std::get width }
+            { !std::get offset }
+            { !std::get handle }
+    }
+    return
+
+@fn is_region_handle(region: RegionHandle) -> Bool
+    let handle = region.handle
+    return b3<Bool> {
+        !daedalus_inner::mem::is_region_handle { !std::get handle }
+    }
+
+@fn mem_copy(len: UInt, src_offset: UInt, src_region: RegionHandle, dst_offset: UInt, dst_region: RegionHandle) -> Void
+    let src_handle = src_region.handle
+    let dst_handle = dst_region.handle
+    b3<Void> {
+        !daedalus_inner::mem::mem_copy
+            { !std::get len }
+            { !std::get src_offset }
+            { !std::get src_handle }
+            { !std::get dst_offset }
+            { !std::get dst_handle }
+    }
+    return
+
+@fn mem_fill(len: UInt, value: UInt, offset: UInt, region: RegionHandle) -> Void
+    let handle = region.handle
+    b3<Void> {
+        !daedalus_inner::mem::mem_fill
+            { !std::get len }
+            { !std::get value }
+            { !std::get offset }
+            { !std::get handle }
+    }
+    return
+
+@fn mem_flush(len: UInt, offset: UInt, region: RegionHandle) -> Void
+    let handle = region.handle
+    b3<Void> {
+        !daedalus_inner::mem::mem_flush
+            { !std::get len }
+            { !std::get offset }
+            { !std::get handle }
+    }
+    return
+
+// = IRQ = //
+
+@fn is_irq_handle(irq: IrqHandle) -> Bool
+    let handle = irq.handle
+    return b3<Bool> {
+        !daedalus_inner::irq::is_irq_handle { !std::get handle }
+    }
+
+@fn irq_release(irq: IrqHandle) -> Void
+    let handle = irq.handle
+    b3<Void> {
+        !daedalus_inner::irq::irq_release { !std::get handle }
+    }
+    return
+
+@fn irq_ack(irq: IrqHandle) -> Void
+    let handle = irq.handle
+    b3<Void> {
+        !daedalus_inner::irq::irq_ack { !std::get handle }
+    }
+    return
+
+@fn irq_register(interrupt_id: UInt) -> IrqHandle
+    return IrqHandle(b3<Tag> {
+        !daedalus_inner::irq::irq_register { !std::get interrupt_id }
+    })
