@@ -27,6 +27,11 @@ struct Manifest {
     /// All of the interrupts (irq defs) for this program
     #[serde(default)]
     interrupts: Vec<InterruptSpec>,
+
+    #[cfg(feature = "wasm")]
+    /// All of the wasm grants this program has
+    #[serde(default)]
+    wasm: Vec<WasmGrantSpec>,
 }
 
 /// The parsed content of a Daedalus
@@ -98,6 +103,33 @@ pub enum GrantBaseKeyword {
 pub enum RegionMemKindSpec {
     Memory,
     Device,
+}
+
+#[cfg(feature = "wasm")]
+/// One WASM module that is embedded into daedalus
+/// for programs to call
+///
+/// See `WasmModule`
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WasmModuleSpec {
+    name: String,
+    image: String,
+}
+
+#[cfg(feature = "wasm")]
+/// One specification of a permission
+/// to call some `wasm` module for a program
+///
+/// See `WasmGrant`
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WasmGrantSpec {
+    name: String,
+    max_memory_kib: usize,
+    max_input_bytes: usize,
+    max_output_bytes: usize,
+    fuel_per_call: u64,
 }
 
 /// See `RegionPermissions`
@@ -424,6 +456,7 @@ fn main() {
     // Daedalus programs if the environment variable is changed needs to rerun
     println!("cargo:rerun-if-env-changed=DAEDALUS_PROGRAMS");
     println!("cargo:rerun-if-env-changed=DAEDALUS_TEMPLATE");
+    println!("cargo:rerun-if-env-changed=DAEDALUS_WASM_MODULES");
 
     // The temp output for our programs
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
@@ -459,6 +492,11 @@ fn main() {
 
     // The seen set of names, a duplicate program name is not permitted
     let mut seen = HashSet::new();
+
+    #[cfg(feature = "wasm")]
+    // All of the seen wasm programs, which we need to track to make sure
+    // they actually exist by the end
+    let mut seen_wasm = HashSet::new();
 
     // All of the seen interrupt ids
     // this is for tracking to build the total set of interrupt ids
@@ -617,6 +655,41 @@ fn main() {
         }
         interrupts_table_literal.push(']');
 
+        // Build the wasm grants table for this program from it's manifest.
+        let wasm_table_literal = {
+            #[cfg(feature = "wasm")]
+            {
+                let mut wasm_table_literal = String::from("[");
+
+                for wasm_grant in &manifest.wasm {
+                    writeln!(
+                        wasm_table_literal,
+                        "WasmGrant {{ 
+                    wasm: {:?},
+                    max_memory_kib: {},
+                    max_input_bytes: {},
+                    max_output_bytes: {},
+                    fuel_per_call: {},
+                    }},",
+                        &wasm_grant.name,
+                        wasm_grant.max_memory_kib,
+                        wasm_grant.max_input_bytes,
+                        wasm_grant.max_output_bytes,
+                        wasm_grant.fuel_per_call
+                    )
+                    .unwrap();
+
+                    // Track this wasm program as part of the total wasm grants
+                    seen_wasm.insert(wasm_grant.name.clone());
+                }
+                wasm_table_literal.push(']');
+                wasm_table_literal
+            }
+
+            #[cfg(not(feature = "wasm"))]
+            String::from("[]")
+        };
+
         // Update the output with our included program
         writeln!(
             output,
@@ -624,9 +697,15 @@ fn main() {
         name: {:?},
         image: &StaticDaedalusImageVariants::{struct_name}(&{}),
         grants: &{},
-        interrupts: &{}
+        interrupts: &{},
+        #[cfg(feature = \"wasm\")]
+        wasm: &{}
         }};",
-            manifest.name, image_literal, grants_table_literal, interrupts_table_literal
+            manifest.name,
+            image_literal,
+            grants_table_literal,
+            interrupts_table_literal,
+            wasm_table_literal
         )
         .unwrap();
     }
@@ -859,6 +938,126 @@ fn main() {
         total_interrupts.len(),
         total_interrupts.iter().collect::<Vec<_>>()
     ));
+
+    #[cfg(not(feature = "wasm"))]
+    if  env::var("DAEDALUS_WASM_MODULES").is_ok() {
+        panic!("\x1b[93mprovided DAEDALUS_WASM_MODULES env var without the `wasm` feature being enabled!\x1b[0m")
+    }
+
+    #[cfg(feature = "wasm")]
+    {
+        // All of the wasm we running
+        let wasm_module_list = env::var("DAEDALUS_WASM_MODULES").unwrap_or_default();
+        let wasm_module_entries: Vec<&str> = wasm_module_list
+            .split(',')
+            .map(str::trim)
+            .filter(|entry| !entry.is_empty())
+            .collect();
+
+        // Write all WASM out
+        let mut wasm_entries = String::new();
+        let mut wasm_names = HashSet::new();
+
+        // engine we validate all prematurely with
+        let mut config = wasmi::Config::default();
+        config.allow_start_fn(false);
+        let wasm_engine = wasmi::Engine::new(&config);
+
+        for wasm_spec in wasm_module_entries {
+            let module_path = PathBuf::from(wasm_spec);
+            println!("cargo:rerun-if-changed={}", module_path.display());
+
+            // Parse the wasm spec format
+            let wasm_spec: WasmModuleSpec =
+                toml::from_str(&fs::read_to_string(&module_path).unwrap_or_else(|e| {
+                    panic!(
+                        "\x1b[93merror reading {}: {e}\x1b[0m",
+                        module_path.display()
+                    )
+                }))
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "\x1b[93merror parsing {}: {e}\x1b[0m",
+                        module_path.display()
+                    )
+                });
+
+            // If we have a duplicate name this isn't allowed as those programs would conflict
+            if !wasm_names.insert(wasm_spec.name.clone()) {
+                panic!(
+                    "\x1b[93mduplicate wasm module name `{}`\x1b[0m",
+                    wasm_spec.name
+                );
+            }
+
+            // An invalid name is one that isn't purely ascii isn't permitted.
+            if !wasm_spec.name.is_ascii() || wasm_spec.name.is_empty() {
+                panic!(
+                    "\x1b[93minvalid non-ascii or empty wasm module name `{}`\x1b[0m",
+                    wasm_spec.name
+                );
+            }
+
+            // The generated include_bytes! for the module image to include it as part of our full bootloader image
+            let image_path = module_path.parent().unwrap().join(&wasm_spec.image);
+            let image_path = fs::canonicalize(&image_path).unwrap_or_else(|e| {
+                panic!(
+                    "\x1b[93mwasm module `{}`: image {} not found ({e}), build it first\x1b[0m",
+                    wasm_spec.name,
+                    image_path.display(),
+                )
+            });
+
+            // If the image changes we need to rebuild
+            println!("cargo:rerun-if-changed={}", image_path.display());
+
+            // Read all the bytes from the image path
+            let bytes = fs::read(&image_path).unwrap_or_else(|e| {
+                panic!("\x1b[93merror reading {}: {e}\x1b[0m", image_path.display());
+            });
+
+            // Actually validate the wasm module
+            wasmi::Module::validate(&wasm_engine, &bytes).unwrap_or_else(|e| {
+                panic!(
+                    "\x1b[93merror validating wasm module {}: {e}\x1b[0m",
+                    image_path.display()
+                );
+            });
+
+            // Seems legit enough... put in!
+            writeln!(
+                wasm_entries,
+                "WasmModule {{
+                    name: {:?},
+                    validated_wasm_bytes: include_bytes!({:?})
+                }},",
+                wasm_spec.name, image_path
+            )
+            .unwrap();
+        }
+
+        output.push_str(&format!(
+            "pub static WASM_MODULES: &[WasmModule] = &[{wasm_entries}];\n"
+        ));
+
+        // The required wasm modules must exist in the set of wasm modules
+        if !wasm_names.is_superset(&seen_wasm) {
+            panic!(
+                "\x1b[93mmissing required wasm module `{:?}`: these were not provided by any referenced daedalus wasm modules\n\nprovided wasm modules: {:?}\x1b[0m",
+                seen_wasm.difference(&wasm_names),
+                wasm_names
+            )
+        }
+
+        // Write out a function to lookup a wasm program b
+        output.push_str(&format!(
+            "
+            pub fn get_wasm_module(name: &str) -> &'static WasmModule {{
+                WASM_MODULES.iter().find(|module| module.name == name).unwrap()
+            }}
+            "
+        ));
+    }
 
     fs::write(&out_file, output).unwrap();
 }

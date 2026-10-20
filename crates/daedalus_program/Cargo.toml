@@ -16,6 +16,11 @@ keywords = ["languages", "scripting", "script"]
 lepton3 = { workspace = true }
 
 [build-dependencies]
+wasmi = { version = "2", default-features = false, optional = true, features = ["validate", "portable-dispatch", "prefer-btree-collections"] }
 serde = { version = "1", features = ["derive"] }
 toml = "1"
 lepton3 = { workspace = true }
+
+[features]
+# Supports wasm!
+wasm = ["wasmi"]
