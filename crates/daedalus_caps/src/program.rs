@@ -6,7 +6,6 @@ use alloc::{collections::vec_deque::VecDeque, vec::Vec};
 use daedalus_program::{
     Grant, Phase, StaticDaedalusImageVariants, StaticLeptonImage, StaticSourceLocation,
 };
-use daedalus_wasm::manager::{LiveInstance, WasmInstanceTag, WasmManager};
 use hashbrown::{HashMap, hash_map::Entry};
 use lepton3::{
     HeapAllocatorImpl, TagGeneratorImpl, VirtualMachine,
@@ -151,7 +150,7 @@ pub struct InactiveProgram<
     #[cfg(feature = "wasm")]
     // All of the current live instances of
     // wasm modules belonging to this program
-    pub wasm_instances: HashMap<WasmInstanceTag, LiveInstance>,
+    pub wasm_instances: HashMap<daedalus_wasm::WasmInstanceTag, daedalus_wasm::LiveInstance>,
 }
 
 pub trait ProgramSwappable<H: HeapAllocator = HeapAllocatorImpl, T: TagGenerator = TagGeneratorImpl>
@@ -457,11 +456,11 @@ pub struct DaedalusState<I: StaticLeptonImage + 'static, H: HeapAllocator, T: Ta
     #[cfg(feature = "wasm")]
     /// The global WASM module manager, which is used to open new modules
     /// at runtime
-    pub wasm_manager: WasmManager,
+    pub wasm_manager: daedalus_wasm::WasmManager,
 
     #[cfg(feature = "wasm")]
     /// The current active live instances to run with wasm
-    pub wasm_instances: HashMap<WasmInstanceTag, LiveInstance>,
+    pub wasm_instances: HashMap<daedalus_wasm::WasmInstanceTag, daedalus_wasm::LiveInstance>,
 }
 
 impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> DaedalusState<I, H, T> {
@@ -494,7 +493,7 @@ impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> Daedalus
             regions,
             named_grants,
             #[cfg(feature = "wasm")]
-            wasm_manager: WasmManager::new(),
+            wasm_manager: daedalus_wasm::WasmManager::new(),
 
             #[cfg(feature = "wasm")]
             wasm_instances: HashMap::new(),

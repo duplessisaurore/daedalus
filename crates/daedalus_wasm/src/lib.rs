@@ -17,3 +17,4 @@ extern crate alloc;
 /// WASM manager, this is the state-shared
 /// module manager for all wasm programs.
 pub mod manager;
+pub use manager::*;
