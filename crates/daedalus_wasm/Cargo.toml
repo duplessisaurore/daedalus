@@ -1,0 +1,19 @@
+[package]
+name = "daedalus_wasm"
+version = "1.0.0"
+edition = "2024"
+authors = ["The Daedalus Contributors"]
+
+description = "Provides wasm integration and support for daedalus with native cap integration with lepton3"
+readme = "README.md"
+
+repository = "https://github.com/duplessisaurore/daedalus"
+license = "AGPLv3"
+
+keywords = ["languages", "scripting", "script"]
+
+[dependencies]
+wasmi = { version = "2", default-features = false, features = ["portable-dispatch", "prefer-btree-collections"] }
+hashbrown = { workspace = true }
+lepton3 = { workspace = true }
+daedalus_program = { workspace = true }

@@ -960,6 +960,7 @@ fn main() {
 
         // engine we validate all prematurely with
         let mut config = wasmi::Config::default();
+        config.consume_fuel(true);
         config.allow_start_fn(false);
         let wasm_engine = wasmi::Engine::new(&config);
 
@@ -1052,8 +1053,8 @@ fn main() {
         // Write out a function to lookup a wasm program b
         output.push_str(&format!(
             "
-            pub fn get_wasm_module(name: &str) -> &'static WasmModule {{
-                WASM_MODULES.iter().find(|module| module.name == name).unwrap()
+            pub fn get_wasm_module(name: &str) -> Option<&'static WasmModule> {{
+                WASM_MODULES.iter().find(|module| module.name == name)
             }}
             "
         ));

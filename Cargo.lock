@@ -88,6 +88,7 @@ version = "1.0.0"
 dependencies = [
  "cfg-if",
  "daedalus_program",
+ "daedalus_wasm",
  "hashbrown",
  "lepton3",
 ]
@@ -99,6 +100,16 @@ dependencies = [
  "lepton3",
  "serde",
  "toml",
+ "wasmi",
+]
+
+[[package]]
+name = "daedalus_wasm"
+version = "1.0.0"
+dependencies = [
+ "daedalus_program",
+ "hashbrown",
+ "lepton3",
  "wasmi",
 ]
 

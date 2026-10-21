@@ -17,8 +17,12 @@ hashbrown = { workspace = true }
 cfg-if = { workspace = true }
 lepton3 = { workspace = true }
 daedalus_program = { workspace = true }
+daedalus_wasm = { workspace = true, optional = true }
 
 [features]
+# wasm
+wasm = ["daedalus_wasm", "daedalus_program/wasm"]
+
 # irq archs
 irq-gicv2 = []
 

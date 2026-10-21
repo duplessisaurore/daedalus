@@ -30,6 +30,12 @@ pub mod memory;
 /// handling from programs
 pub mod irq;
 
+#[cfg(feature = "wasm")]
+/// Capabilities that provide for WASM integration for
+/// programs
+pub mod wasm;
+
 /// Errors that can occur during the running of the IPC
 /// capabilities/phase driving caps
 pub mod errors;
+
