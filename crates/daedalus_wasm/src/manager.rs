@@ -287,6 +287,11 @@ impl LiveInstance {
             });
         }
 
+        // Reset fuel for this invocation.
+        self.store.set_fuel(self.grant.fuel_per_call).map_err(|e| {
+            DaedalusWasmErrors::Unexpected(format!("fuel reset: {e:?}"))
+        })?;
+
         // Allocate at least one byte (or else explode null ptrs)
         // for the current call's outputs/inputs
         let input_allocation = input.len().max(1) as u32;
