@@ -1,0 +1,51 @@
+// daedalus_wasm.b3
+//
+// This file contains all of the `Daedalus` WASM-extension capabilities as macros.
+//
+// Prefer using this to raw capability calls as it is easier to port
+// on breaking major versions by linking to this
+//
+// This library has no dependencies and may be used anywhere.
+
+@namespace daedalus_wasm_inner
+
+@capability cap_wasm_open 23 
+@capability cap_wasm_call 24
+@capability cap_wasm_close 25
+@capability cap_is_instance_handle 26   
+
+
+// ## wasm::wasm_open <name>
+//
+// returns: [<top> `instance`]
+@macro wasm::wasm_open (name)
+    $name
+    call.cap cap_wasm_open
+@end
+
+// ## wasm::wasm_close <instance>
+@macro wasm::wasm_close (instance)
+    $instance
+    call.cap cap_wasm_close
+@end
+
+// ## wasm::is_instance_handle <instance>
+//
+// returns: [<top> `is_instance_handle`]
+@macro wasm::is_instance_handle (instance)
+    $instance
+    call.cap cap_is_instance_handle
+@end
+
+
+// ## wasm::wasm_call <output_capacity, input_bytes, operation_uint, abort, instance>
+//
+// returns: [<top> status, output_bytes]
+@macro wasm::wasm_call (output_capacity, input_bytes, operation_uint, abort, instance)
+    $instance
+    $abort
+    $operation_uint
+    $input_bytes
+    $output_capacity
+    call.cap cap_wasm_call
+@end

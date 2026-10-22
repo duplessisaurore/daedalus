@@ -1,0 +1,55 @@
+// daedalus_wasm.p3
+//
+// Photon3 function wrappers for daedalus WASM macros
+
+@namespace daedalus_wasm
+
+@requires std
+@requires daedalus_wasm_inner
+
+@object InstanceHandle (handle: Tag)
+
+// recieved wasm value
+@object WASMReturn (status: Int, bytes: Array[UInt])
+
+@fn wasm_open(name: String) -> InstanceHandle
+    return InstanceHandle(b3<Tag> {
+        !daedalus_wasm_inner::wasm::wasm_open { !std::get name }
+    })
+
+@fn wasm_close(instance: InstanceHandle) -> Void
+    let handle = instance.handle
+    b3<Void> {
+         !daedalus_wasm_inner::wasm::wasm_close { !std::get handle }
+    }
+    return
+
+@fn wasm_call(output_capacity: UInt, input_bytes: Array[UInt], operation_uint: UInt, should_abort: Bool, instance: InstanceHandle) -> WASMReturn
+    let handle = instance.handle
+    b3<Void> {
+        !daedalus_wasm_inner::wasm::wasm_call
+            { !std::get output_capacity }
+            { !std::get input_bytes }
+            { !std::get operation_uint }
+            { !std::get should_abort }
+            { !std::get handle }
+
+        @local ret_status
+        store.local ret_status
+
+        @local ret_bytes
+        store.local ret_bytes
+    }
+
+    return WASMReturn(b3<Int> {
+        !std::get ret_status
+    }, b3<Array> {
+        !std::get ret_bytes
+    } as Array[UInt])
+
+
+@fn is_instance_handle(instance: InstanceHandle) -> Bool
+    let handle = instance.handle
+    return b3<Bool> {
+        !daedalus_wasm_inner::wasm::is_instance_handle { !std::get handle }
+    }

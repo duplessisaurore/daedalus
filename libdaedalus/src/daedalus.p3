@@ -5,7 +5,6 @@
 @namespace daedalus
 
 @requires std
-@requires std::string
 @requires daedalus_inner
 
 @object RegionHandle (handle: Tag)
