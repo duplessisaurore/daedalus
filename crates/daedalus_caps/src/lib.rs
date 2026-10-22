@@ -39,3 +39,5 @@ pub mod wasm;
 /// capabilities/phase driving caps
 pub mod errors;
 
+/// Null cap for optional extension filling in slots
+pub mod null;

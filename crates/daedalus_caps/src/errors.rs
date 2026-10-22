@@ -269,6 +269,9 @@ pub enum DaedalusCapErrors {
         original_program: &'static str,
         new_program: &'static str,
     },
+
+    /// A null capability was called
+    InvokedNullCap,
 }
 
 impl Display for DaedalusCapErrors {
@@ -625,6 +628,9 @@ impl Display for DaedalusCapErrors {
                 f,
                 "daedalus expected that regions would never overlap with irq arch, instead found `{underlying_error}`!"
             ),
+            Self::InvokedNullCap => {
+                write!(f, "daedalus found invocation of invalid null cap")
+            }
         }
     }
 }

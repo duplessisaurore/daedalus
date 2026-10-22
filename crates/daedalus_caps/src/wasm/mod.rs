@@ -300,3 +300,37 @@ pub fn cap_is_instance_handle<H: HeapAllocator, T: TagGenerator>(
     virtual_machine.stack.push(Value::Bool(is_instance));
     Ok(())
 }
+
+/// = `wasm_close`
+///
+/// Closes an instance of a module under this
+/// current program
+///
+/// This takes the `instance` of the module
+///
+///     [<top> `instance`]
+///
+/// The program will then drop this instance, making
+/// the handle invalid. Nothing will be pushed to the stack.
+///
+pub fn cap_wasm_close<H: HeapAllocator, T: TagGenerator>(
+    virtual_machine: &mut DaedalusVm<H, T>,
+) -> Result<(), Box<dyn Error>> {
+    // Maybe instance handle here, should always be a tag.
+    let value = virtual_machine
+        .pop_maybe()
+        .ok_or(DaedalusWasmCapErrors::StackUnderflowExpectedInstanceHandle)?;
+
+    let Value::Tag(instance_tag) = value else {
+        return Err(DaedalusWasmCapErrors::InstanceHandleExpected {
+            found_type: value_type_name(&value),
+        })?;
+    };
+
+    // Should have a corresponding wasm instance if it is a handle
+    let state = &mut virtual_machine.capability_state;
+    let handle = WasmInstanceHandle(instance_tag);
+
+    state.wasm_instances.remove(&handle);
+    Ok(())
+}

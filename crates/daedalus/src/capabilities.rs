@@ -31,7 +31,7 @@ pub type DaedalusCapabilityFn<H, T> = CapabilityFn<
 /// Awrrufff!
 pub fn all<H: HeapAllocator, T: TagGenerator>() -> vec::Vec<DaedalusCapabilityFn<H, T>> {
     // rust kinda struggles to infer the type, so we need to help it out
-    let caps: vec::Vec<DaedalusCapabilityFn<H, T>> = vec![
+    let mut caps: vec::Vec<DaedalusCapabilityFn<H, T>> = vec![
         // IPC caps
         ipc::cap_block_call,
         ipc::cap_block_recv,
@@ -60,5 +60,25 @@ pub fn all<H: HeapAllocator, T: TagGenerator>() -> vec::Vec<DaedalusCapabilityFn
         irq::cap_irq_register,
     ];
 
+    // Optional WASM extension caps (otherwise null)
+    let mut wasm_caps: vec::Vec<DaedalusCapabilityFn<H, T>> = {
+        #[cfg(feature = "wasm")]
+        {
+            vec![
+                daedalus_caps::wasm::cap_wasm_open,
+                daedalus_caps::wasm::cap_wasm_call,
+                daedalus_caps::wasm::cap_wasm_close,
+                daedalus_caps::wasm::cap_is_instance_handle,
+            ]
+        }
+
+        #[cfg(not(feature = "wasm"))]
+        {
+            use daedalus_caps::null::cap_null;
+            vec![cap_null, cap_null, cap_null, cap_null]
+        }
+    };
+
+    caps.append(&mut wasm_caps);
     caps
 }

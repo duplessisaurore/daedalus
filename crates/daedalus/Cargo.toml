@@ -31,3 +31,6 @@ extra-debug = []
 # Xilinx
 platform-zynqmp = ["daedalus_caps/platform-zynqmp"]
 platform-zcu106 = ["daedalus_caps/platform-zcu106", "platform-zynqmp"]
+
+# wasm support
+wasm = ["daedalus_caps/wasm", "daedalus_program/wasm"]
