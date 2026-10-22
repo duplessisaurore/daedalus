@@ -105,7 +105,7 @@ pub struct WasmGrant {
 
     /// The maximum memory this WASM program can use instanced
     /// for the current program
-    pub max_memory_kib: usize,
+    pub max_memory_bytes: usize,
 
     /// Maximum input bytes to this program
     pub max_input_bytes: usize,

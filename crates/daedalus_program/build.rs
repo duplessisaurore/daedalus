@@ -126,7 +126,7 @@ struct WasmModuleSpec {
 #[serde(deny_unknown_fields)]
 struct WasmGrantSpec {
     name: String,
-    max_memory_kib: usize,
+    max_memory_bytes: usize,
     max_input_bytes: usize,
     max_output_bytes: usize,
     fuel_per_call: u64,
@@ -666,13 +666,13 @@ fn main() {
                         wasm_table_literal,
                         "WasmGrant {{ 
                     wasm: {:?},
-                    max_memory_kib: {},
+                    max_memory_bytes: {},
                     max_input_bytes: {},
                     max_output_bytes: {},
                     fuel_per_call: {},
                     }},",
                         &wasm_grant.name,
-                        wasm_grant.max_memory_kib,
+                        wasm_grant.max_memory_bytes,
                         wasm_grant.max_input_bytes,
                         wasm_grant.max_output_bytes,
                         wasm_grant.fuel_per_call

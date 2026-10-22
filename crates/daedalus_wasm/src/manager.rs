@@ -204,7 +204,7 @@ impl WasmManager {
 
         // We limit this specific instance's memory etc.
         let limits = StoreLimitsBuilder::new()
-            .memory_size(grant.max_memory_kib)
+            .memory_size(grant.max_memory_bytes)
             .memories(1)
             .instances(1)
             .build();
