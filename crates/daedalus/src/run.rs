@@ -15,9 +15,7 @@ use daedalus_caps::{
 };
 use daedalus_program::{StaticDaedalusImageVariants, StaticSourceLocation};
 use lepton3::{
-    HeapAllocatorImpl, TagGeneratorImpl, VirtualMachine,
-    lepton_image::image_trait::{LeptonImage, LeptonSourceLocation},
-    lepton_vm::virtual_machine::VmError,
+    HeapAllocatorImpl, TagGeneratorImpl, VirtualMachine, lepton_image::image_trait::{LeptonImage, LeptonSourceLocation}, lepton_vm::{heap_allocator::HeapItem, virtual_machine::VmError},
 };
 
 #[cfg(feature = "extra-debug")]
@@ -32,6 +30,7 @@ use crate::extra_debug;
 pub struct VmPanic<'a> {
     pub error: &'a VmError<'static, StaticSourceLocation>,
     pub image: &'a StaticDaedalusImageVariants,
+    pub heap: &'a [HeapItem],
 }
 
 use crate::{capabilities, handoff::arch_handoff};
@@ -123,7 +122,8 @@ pub fn run() -> ! {
                             error: Box::new(error),
                             trace,
                         },
-                        image: vm.image
+                        image: vm.image,
+                        heap: &vm.heap.from_space
                     }
                 );
             }
@@ -178,10 +178,29 @@ impl Display for VmPanic<'_> {
                             )?;
                         }
                     }
+
+                    for (idx, local) in frame.locals.iter().enumerate() {
+                        writeln!(
+                            f,
+                            "    ({}) {:?}",
+                            idx,
+                            local
+                        )?;
+                    }
                 }
             }
 
             other => write!(f, "{other:?}")?,
+        }
+
+        writeln!(f, "\nheap:")?;
+        for (idx, item) in self.heap.iter().enumerate() {
+            writeln!(
+                f,
+                "    ({}) {:?}",
+                idx,
+                item
+            )?;
         }
 
         Ok(())

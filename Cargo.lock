@@ -37,9 +37,9 @@ checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 
 [[package]]
 name = "cc"
-version = "1.8.0"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6651c9ed80effdc7db0ff72512157f901af5e3549e341e24b1dd4887d836d838"
+checksum = "877bf67ac8e52449eb2f9e98a344ea163beb70dd1f9eebe3cc5357dcfeaee4df"
 dependencies = [
  "find-msvc-tools",
  "shlex",
@@ -121,9 +121,9 @@ checksum = "00d174d5400e5e8fd687ad1049e2f578285fa914201b1af7e8b112a4546bd826"
 
 [[package]]
 name = "find-msvc-tools"
-version = "0.1.14"
+version = "0.1.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aedcfb3409746eddb02b9e19ebda1c3394f759a152e48ee875a0844d1b955484"
+checksum = "1c66915cc5391097de7a2b0b972e8505aa33c0df401fd3a6811dbdb32881ba48"
 
 [[package]]
 name = "foldhash"
@@ -213,8 +213,8 @@ dependencies = [
 
 [[package]]
 name = "lepton3"
-version = "10.2.3"
-source = "git+https://github.com/duplessisaurore/lepton3#c51c660de6ae39f86532cc6bd624cc0ae4347fc1"
+version = "10.3.3"
+source = "git+https://github.com/duplessisaurore/lepton3#00bb56cb5cd373fec1331322ae8e346fc8086882"
 dependencies = [
  "lepton_image",
  "lepton_opcodes",
@@ -224,7 +224,7 @@ dependencies = [
 [[package]]
 name = "lepton_image"
 version = "2.3.0"
-source = "git+https://github.com/duplessisaurore/lepton3#c51c660de6ae39f86532cc6bd624cc0ae4347fc1"
+source = "git+https://github.com/duplessisaurore/lepton3#00bb56cb5cd373fec1331322ae8e346fc8086882"
 dependencies = [
  "lepton_opcodes",
 ]
@@ -232,12 +232,12 @@ dependencies = [
 [[package]]
 name = "lepton_opcodes"
 version = "3.1.0"
-source = "git+https://github.com/duplessisaurore/lepton3#c51c660de6ae39f86532cc6bd624cc0ae4347fc1"
+source = "git+https://github.com/duplessisaurore/lepton3#00bb56cb5cd373fec1331322ae8e346fc8086882"
 
 [[package]]
 name = "lepton_vm"
-version = "10.4.3"
-source = "git+https://github.com/duplessisaurore/lepton3#c51c660de6ae39f86532cc6bd624cc0ae4347fc1"
+version = "10.5.3"
+source = "git+https://github.com/duplessisaurore/lepton3#00bb56cb5cd373fec1331322ae8e346fc8086882"
 dependencies = [
  "lepton_image",
  "lepton_opcodes",
