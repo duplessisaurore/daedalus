@@ -150,7 +150,7 @@ pub struct InactiveProgram<
     #[cfg(feature = "wasm")]
     // All of the current live instances of
     // wasm modules belonging to this program
-    pub wasm_instances: HashMap<daedalus_wasm::WasmInstanceTag, daedalus_wasm::LiveInstance>,
+    pub wasm_instances: HashMap<daedalus_wasm::WasmInstanceHandle, daedalus_wasm::LiveInstance>,
 }
 
 pub trait ProgramSwappable<H: HeapAllocator = HeapAllocatorImpl, T: TagGenerator = TagGeneratorImpl>
@@ -460,7 +460,7 @@ pub struct DaedalusState<I: StaticLeptonImage + 'static, H: HeapAllocator, T: Ta
 
     #[cfg(feature = "wasm")]
     /// The current active live instances to run with wasm
-    pub wasm_instances: HashMap<daedalus_wasm::WasmInstanceTag, daedalus_wasm::LiveInstance>,
+    pub wasm_instances: HashMap<daedalus_wasm::WasmInstanceHandle, daedalus_wasm::LiveInstance>,
 }
 
 impl<I: StaticLeptonImage + 'static, H: HeapAllocator, T: TagGenerator> DaedalusState<I, H, T> {
