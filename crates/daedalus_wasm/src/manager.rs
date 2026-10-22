@@ -8,6 +8,8 @@ use alloc::{
     string::{String, ToString},
     vec::{Vec},
 };
+
+use alloc::vec;
 use daedalus_program::{WasmGrant, get_program, get_wasm_module};
 use hashbrown::HashMap;
 use lepton3::lepton_vm::{tagger::TagGenerator, values::Tag};
@@ -358,8 +360,7 @@ impl LiveInstance {
             }
 
             // Read output from the module
-            let mut output = Vec::with_capacity(result as usize);
-            output.fill(0);
+            let mut output = vec![0; result.try_into().unwrap()];
 
             self.memory
                 .read(&self.store, out_ptr as usize, &mut output)
