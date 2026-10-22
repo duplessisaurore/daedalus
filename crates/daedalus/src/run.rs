@@ -3,9 +3,9 @@
 //!
 //! This also initialises the full VM and brings it into function.
 
-use core::fmt::Display;
+use core::{fmt::Display};
 
-use alloc::boxed::Box;
+use alloc::{boxed::Box, string::ToString};
 use daedalus_caps::{
     errors::DaedalusCapErrors,
     ipc::capabilities::run_next_ready,
@@ -99,7 +99,7 @@ pub fn run() -> ! {
         match vm.step() {
             Ok(None) => {}
             Ok(Some(_)) => {
-                todo!()
+               panic!("Daedalus exited last phase without going through proper handoff mechanism with finish!")
             }
             Err(error) => {
                 // If we've hit end of phases, handoff to this address.
@@ -131,11 +131,18 @@ pub fn run() -> ! {
     }
 }
 
+
 impl Display for VmPanic<'_> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self.error {
             VmError::WithTrace { error, trace } => {
-                writeln!(f, "runtime error: {error:?}")?;
+                match &**error {
+                    VmError::CapabilityError(cap_error) => { writeln!(f, "{}", cap_error.to_string())?; },
+                    other @ _ => {
+                        writeln!(f, "runtime error: {other:?}")?;
+                    }
+                };
+
                 writeln!(f, "stack trace:")?;
 
                 // Get all the files to match the files to the trace
