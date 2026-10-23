@@ -15,7 +15,7 @@ use daedalus_caps::{
 };
 use daedalus_program::{StaticDaedalusImageVariants, StaticSourceLocation};
 use lepton3::{
-    HeapAllocatorImpl, TagGeneratorImpl, VirtualMachine, lepton_image::image_trait::{LeptonImage, LeptonSourceLocation}, lepton_vm::{heap_allocator::HeapItem, virtual_machine::VmError},
+    HeapAllocatorImpl, TagGeneratorImpl, VirtualMachine, lepton_image::image_trait::{LeptonImage, LeptonSourceLocation}, lepton_vm::{virtual_machine::VmError},
 };
 
 #[cfg(feature = "extra-debug")]
@@ -30,7 +30,8 @@ use crate::extra_debug;
 pub struct VmPanic<'a> {
     pub error: &'a VmError<'static, StaticSourceLocation>,
     pub image: &'a StaticDaedalusImageVariants,
-    pub heap: &'a [HeapItem],
+    #[cfg(feature="full-trace")]
+    pub heap: &'a [lepton3::lepton_vm::heap_allocator::HeapItem],
 }
 
 use crate::{capabilities, handoff::arch_handoff};
@@ -123,6 +124,7 @@ pub fn run() -> ! {
                             trace,
                         },
                         image: vm.image,
+                        #[cfg(feature="full-trace")]
                         heap: &vm.heap.from_space
                     }
                 );
