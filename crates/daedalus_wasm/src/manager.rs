@@ -6,7 +6,7 @@ use core::{error::Error, fmt::Display};
 use alloc::{
     format,
     string::{String, ToString},
-    vec::{Vec},
+    vec::Vec,
 };
 
 use alloc::vec;
@@ -288,9 +288,9 @@ impl LiveInstance {
         }
 
         // Reset fuel for this invocation.
-        self.store.set_fuel(self.grant.fuel_per_call).map_err(|e| {
-            DaedalusWasmErrors::Unexpected(format!("fuel reset: {e:?}"))
-        })?;
+        self.store
+            .set_fuel(self.grant.fuel_per_call)
+            .map_err(|e| DaedalusWasmErrors::Unexpected(format!("fuel reset: {e:?}")))?;
 
         // Allocate at least one byte (or else explode null ptrs)
         // for the current call's outputs/inputs
@@ -400,7 +400,6 @@ impl LiveInstance {
     }
 }
 
-
 impl Display for DaedalusWasmErrors {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
@@ -409,109 +408,109 @@ impl Display for DaedalusWasmErrors {
                     f,
                     "daedalus program `{program_name}` attempted to open wasm module `{name}`, but no wasm module with that name exists!"
                 )
-            },
+            }
             Self::CouldNotFindProgram { program_name } => {
                 write!(
                     f,
                     "daedalus attempted to look up program `{program_name}` as owner of new wasm module, but could not find any program with that name!"
                 )
-            },
+            }
             Self::AccessToNonGrantedModule { program_name, name } => {
                 write!(
                     f,
                     "daedalus program `{program_name}` attempted to open wasm module `{name}`, but this program has no grant to this module!"
                 )
-            },
+            }
             Self::Unexpected(err) => {
                 write!(
                     f,
                     "daedalus encountered an unexpected error while managing a wasm module: `{err}`!"
                 )
-            },
+            }
             Self::InvalidMemoryAbi => {
                 write!(
                     f,
                     "daedalus expected wasm module to export a valid linear memory named `memory`, but no such memory was found!"
                 )
-            },
+            }
             Self::InvalidAllocationAbi => {
                 write!(
                     f,
                     "daedalus expected wasm module to export an allocation function `daedalus_alloc` with signature `(u32) -> u32`, but no valid function was found!"
                 )
-            },
+            }
             Self::InvalidFreeAbi => {
                 write!(
                     f,
                     "daedalus expected wasm module to export a freeing function `daedalus_free` with signature `(u32, u32) -> ()`, but no valid function was found!"
                 )
-            },
+            }
             Self::InvalidCallAbi => {
                 write!(
                     f,
                     "daedalus expected wasm module to export a call function `daedalus_call` with signature `(u32, u32, u32, u32, u32) -> i32`, but no valid function was found!"
                 )
-            },
+            }
             Self::InputTooLarge { module } => {
                 write!(
                     f,
                     "daedalus attempted to invoke wasm module `{module}` with an input that exceeds the maximum permitted input size for this module!"
                 )
-            },
+            }
             Self::UserOutputTooLarge { module } => {
                 write!(
                     f,
                     "daedalus attempted to invoke wasm module `{module}` with a requested output capacity that exceeds the maximum permitted output size for this module!"
                 )
-            },
+            }
             Self::ModuleOutputTooLarge { module } => {
                 write!(
                     f,
                     "daedalus wasm module `{module}` returned an output length that exceeds the output capacity provided for this invocation!"
                 )
-            },
+            }
             Self::InAllocationFailed { module, err } => {
                 write!(
                     f,
                     "daedalus failed to allocate memory for input to wasm module `{module}`, underlying allocation error: `{err}`!"
                 )
-            },
+            }
             Self::OutAllocationFailed { module, err } => {
                 write!(
                     f,
                     "daedalus failed to allocate memory for output from wasm module `{module}`, underlying allocation error: `{err}`!"
                 )
-            },
+            }
             Self::InFreeFailed { module, err } => {
                 write!(
                     f,
                     "daedalus failed to free input memory allocated within wasm module `{module}`, underlying freeing error: `{err}`!"
                 )
-            },
+            }
             Self::OutFreeFailed { module, err } => {
                 write!(
                     f,
                     "daedalus failed to free output memory allocated within wasm module `{module}`, underlying freeing error: `{err}`!"
                 )
-            },
+            }
             Self::FailedToWriteInput { module, err } => {
                 write!(
                     f,
                     "daedalus failed to write input bytes into the linear memory of wasm module `{module}`, underlying memory error: `{err}`!"
                 )
-            },
+            }
             Self::FailedToRetOutput { module, err } => {
                 write!(
                     f,
                     "daedalus failed to retrieve output bytes from the linear memory of wasm module `{module}`, underlying memory error: `{err}`!"
                 )
-            },
+            }
             Self::FailedToRunCall { module, err } => {
                 write!(
                     f,
                     "daedalus failed to execute `daedalus_call` for wasm module `{module}`, underlying execution error: `{err}`!"
                 )
-            },
+            }
         }
     }
 }
@@ -525,7 +524,7 @@ impl DaedalusWasmErrors {
         match self {
             DaedalusWasmErrors::ModuleDoesNotExist { .. } => -1001,
             DaedalusWasmErrors::CouldNotFindProgram { .. } => -1002,
-            DaedalusWasmErrors::AccessToNonGrantedModule {.. } => -1003,
+            DaedalusWasmErrors::AccessToNonGrantedModule { .. } => -1003,
             DaedalusWasmErrors::Unexpected(_) => -1004,
             DaedalusWasmErrors::InvalidMemoryAbi => -1005,
             DaedalusWasmErrors::InvalidAllocationAbi => -1006,

@@ -671,7 +671,7 @@ fn main() {
                     max_output_bytes: {},
                     fuel_per_call: {},
                     }},",
-                        &wasm_grant.name,
+                        wasm_grant.name,
                         wasm_grant.max_memory_bytes,
                         wasm_grant.max_input_bytes,
                         wasm_grant.max_output_bytes,
@@ -940,8 +940,10 @@ fn main() {
     ));
 
     #[cfg(not(feature = "wasm"))]
-    if  env::var("DAEDALUS_WASM_MODULES").is_ok() {
-        panic!("\x1b[93mprovided DAEDALUS_WASM_MODULES env var without the `wasm` feature being enabled!\x1b[0m")
+    if env::var("DAEDALUS_WASM_MODULES").is_ok() {
+        panic!(
+            "\x1b[93mprovided DAEDALUS_WASM_MODULES env var without the `wasm` feature being enabled!\x1b[0m"
+        )
     }
 
     #[cfg(feature = "wasm")]
@@ -1051,13 +1053,11 @@ fn main() {
         }
 
         // Write out a function to lookup a wasm program b
-        output.push_str(&format!(
-            "
-            pub fn get_wasm_module(name: &str) -> Option<&'static WasmModule> {{
+        output.push_str("
+            pub fn get_wasm_module(name: &str) -> Option<&'static WasmModule> {
                 WASM_MODULES.iter().find(|module| module.name == name)
-            }}
-            "
-        ));
+            }
+            ");
     }
 
     fs::write(&out_file, output).unwrap();

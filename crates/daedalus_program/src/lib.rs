@@ -50,7 +50,7 @@ pub struct Program<Image: StaticLeptonImage + 'static> {
     pub grants: &'static [Grant],
 
     #[cfg(feature = "wasm")]
-    /// Wasm programs this is allowed to call 
+    /// Wasm programs this is allowed to call
     pub wasm: &'static [WasmGrant],
 
     /// The interrupts assigned to this process.
@@ -67,9 +67,8 @@ pub struct WasmModule {
 
     /// The literal bytes that compose this,
     /// this is pre-validated by the build-tool using an engine
-    pub validated_wasm_bytes: &'static [u8]
+    pub validated_wasm_bytes: &'static [u8],
 }
-
 
 /// One Lepton3 daedalus phase
 pub struct Phase<Image: StaticLeptonImage + 'static> {

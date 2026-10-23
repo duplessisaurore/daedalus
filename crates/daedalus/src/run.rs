@@ -3,7 +3,7 @@
 //!
 //! This also initialises the full VM and brings it into function.
 
-use core::{fmt::Display};
+use core::fmt::Display;
 
 use alloc::{boxed::Box, string::ToString};
 use daedalus_caps::{
@@ -15,7 +15,9 @@ use daedalus_caps::{
 };
 use daedalus_program::{StaticDaedalusImageVariants, StaticSourceLocation};
 use lepton3::{
-    HeapAllocatorImpl, TagGeneratorImpl, VirtualMachine, lepton_image::image_trait::{LeptonImage, LeptonSourceLocation}, lepton_vm::{virtual_machine::VmError},
+    HeapAllocatorImpl, TagGeneratorImpl, VirtualMachine,
+    lepton_image::image_trait::{LeptonImage, LeptonSourceLocation},
+    lepton_vm::virtual_machine::VmError,
 };
 
 #[cfg(feature = "extra-debug")]
@@ -30,7 +32,7 @@ use crate::extra_debug;
 pub struct VmPanic<'a> {
     pub error: &'a VmError<'static, StaticSourceLocation>,
     pub image: &'a StaticDaedalusImageVariants,
-    #[cfg(feature="full-trace")]
+    #[cfg(feature = "full-trace")]
     pub heap: &'a [lepton3::lepton_vm::heap_allocator::HeapItem],
 }
 
@@ -99,7 +101,9 @@ pub fn run() -> ! {
         match vm.step() {
             Ok(None) => {}
             Ok(Some(_)) => {
-               panic!("Daedalus exited last phase without going through proper handoff mechanism with finish!")
+                panic!(
+                    "Daedalus exited last phase without going through proper handoff mechanism with finish!"
+                )
             }
             Err(error) => {
                 // If we've hit end of phases, handoff to this address.
@@ -124,7 +128,7 @@ pub fn run() -> ! {
                             trace,
                         },
                         image: vm.image,
-                        #[cfg(feature="full-trace")]
+                        #[cfg(feature = "full-trace")]
                         heap: &vm.heap.from_space
                     }
                 );
@@ -133,14 +137,15 @@ pub fn run() -> ! {
     }
 }
 
-
 impl Display for VmPanic<'_> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self.error {
             VmError::WithTrace { error, trace } => {
                 match &**error {
-                    VmError::CapabilityError(cap_error) => { writeln!(f, "{}", cap_error.to_string())?; },
-                    other @ _ => {
+                    VmError::CapabilityError(cap_error) => {
+                        writeln!(f, "{}", cap_error)?;
+                    }
+                    other => {
                         writeln!(f, "runtime error: {other:?}")?;
                     }
                 };
@@ -181,15 +186,10 @@ impl Display for VmPanic<'_> {
                         }
                     }
 
-                    #[cfg(feature="full-trace")]
+                    #[cfg(feature = "full-trace")]
                     {
                         for (idx, local) in frame.locals.iter().enumerate() {
-                            writeln!(
-                                f,
-                                "    ({}) {:?}",
-                                idx,
-                                local
-                            )?;
+                            writeln!(f, "    ({}) {:?}", idx, local)?;
                         }
                     }
                 }
@@ -198,16 +198,11 @@ impl Display for VmPanic<'_> {
             other => write!(f, "{other:?}")?,
         }
 
-        #[cfg(feature="full-trace")]
+        #[cfg(feature = "full-trace")]
         {
             writeln!(f, "\nheap:")?;
             for (idx, item) in self.heap.iter().enumerate() {
-                writeln!(
-                    f,
-                    "    ({}) {:?}",
-                    idx,
-                    item
-                )?;
+                writeln!(f, "    ({}) {:?}", idx, item)?;
             }
         }
 

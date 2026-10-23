@@ -396,7 +396,10 @@ impl<H: HeapAllocator, T: TagGenerator> ProgramSwappable<H, T>
             ),
 
             #[cfg(feature = "wasm")]
-            wasm_instances: core::mem::replace(&mut self.capability_state.wasm_instances, program.wasm_instances),
+            wasm_instances: core::mem::replace(
+                &mut self.capability_state.wasm_instances,
+                program.wasm_instances,
+            ),
         }
     }
 }

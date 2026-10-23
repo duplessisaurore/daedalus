@@ -12,9 +12,7 @@ use lepton3::lepton_vm::{
     virtual_machine::value_type_name,
 };
 
-use crate::{
-    ipc::capabilities::DaedalusVm, wasm::errors::DaedalusWasmCapErrors,
-};
+use crate::{ipc::capabilities::DaedalusVm, wasm::errors::DaedalusWasmCapErrors};
 
 /// Errors that can occur
 pub mod errors;
