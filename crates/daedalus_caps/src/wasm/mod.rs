@@ -22,9 +22,9 @@ pub mod errors;
 ///
 /// This will either return the `LiveInstance` if it can be found or
 /// an error if it could not be found.
-fn pop_live_instance<'a, H: HeapAllocator, T: TagGenerator>(
-    virtual_machine: &'a mut DaedalusVm<H, T>,
-) -> Result<&'a mut LiveInstance, Box<dyn Error>> {
+fn pop_live_instance<H: HeapAllocator, T: TagGenerator>(
+    virtual_machine: &mut DaedalusVm<H, T>,
+) -> Result<&mut LiveInstance, Box<dyn Error>> {
     // Should be an instance handle here
     let value = virtual_machine
         .pop_maybe()
@@ -232,7 +232,7 @@ pub fn cap_wasm_call<H: HeapAllocator, T: TagGenerator>(
         Err(err) => {
             // If we aren't aborting, turn the wasm module error into a normal ret
             if abort {
-                return Err(err)?;
+                return Err(Box::new(err));
             }
 
             InvocationRet {

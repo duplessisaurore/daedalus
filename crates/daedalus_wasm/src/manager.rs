@@ -543,3 +543,9 @@ impl DaedalusWasmErrors {
         }
     }
 }
+
+impl Default for WasmManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}

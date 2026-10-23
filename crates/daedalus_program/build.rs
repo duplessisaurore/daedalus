@@ -1053,11 +1053,13 @@ fn main() {
         }
 
         // Write out a function to lookup a wasm program b
-        output.push_str("
+        output.push_str(
+            "
             pub fn get_wasm_module(name: &str) -> Option<&'static WasmModule> {
                 WASM_MODULES.iter().find(|module| module.name == name)
             }
-            ");
+            ",
+        );
     }
 
     fs::write(&out_file, output).unwrap();

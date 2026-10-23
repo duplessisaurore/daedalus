@@ -5,7 +5,7 @@
 
 use core::fmt::Display;
 
-use alloc::{boxed::Box, string::ToString};
+use alloc::boxed::Box;
 use daedalus_caps::{
     errors::DaedalusCapErrors,
     ipc::capabilities::run_next_ready,
