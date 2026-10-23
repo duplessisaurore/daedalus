@@ -23,6 +23,9 @@ daedalus_program = { workspace = true }
 chrono = "0.4.45"
 
 [features]
+# Prints all locals for each frame and full heap information
+full-trace = ["extra-debug"]
+
 # Panic debug, read very carefully before enabling!
 extra-debug = []
 

@@ -179,13 +179,16 @@ impl Display for VmPanic<'_> {
                         }
                     }
 
-                    for (idx, local) in frame.locals.iter().enumerate() {
-                        writeln!(
-                            f,
-                            "    ({}) {:?}",
-                            idx,
-                            local
-                        )?;
+                    #[cfg(feature="full-trace")]
+                    {
+                        for (idx, local) in frame.locals.iter().enumerate() {
+                            writeln!(
+                                f,
+                                "    ({}) {:?}",
+                                idx,
+                                local
+                            )?;
+                        }
                     }
                 }
             }
@@ -193,14 +196,17 @@ impl Display for VmPanic<'_> {
             other => write!(f, "{other:?}")?,
         }
 
-        writeln!(f, "\nheap:")?;
-        for (idx, item) in self.heap.iter().enumerate() {
-            writeln!(
-                f,
-                "    ({}) {:?}",
-                idx,
-                item
-            )?;
+        #[cfg(feature="full-trace")]
+        {
+            writeln!(f, "\nheap:")?;
+            for (idx, item) in self.heap.iter().enumerate() {
+                writeln!(
+                    f,
+                    "    ({}) {:?}",
+                    idx,
+                    item
+                )?;
+            }
         }
 
         Ok(())
