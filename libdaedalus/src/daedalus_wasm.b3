@@ -9,10 +9,10 @@
 
 @namespace daedalus_wasm_inner
 
-@capability cap_wasm_open 23 
-@capability cap_wasm_call 24
-@capability cap_wasm_close 25
-@capability cap_is_instance_handle 26   
+@capability cap_wasm_open 25
+@capability cap_wasm_call 26
+@capability cap_wasm_close 27
+@capability cap_is_instance_handle 28   
 
 
 // ## wasm::wasm_open <name>

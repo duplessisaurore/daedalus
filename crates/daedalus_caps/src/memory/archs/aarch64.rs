@@ -261,6 +261,41 @@ impl MemoryArch for Aarch64 {
         }
     }
 
+    unsafe fn read_n<'a, I>(pointer: *const u8, width: AccessWidth, n: usize, buffer: I)
+    where
+        I: Iterator<Item = &'a mut u64>,
+    {
+        let step = width.bytes();
+
+        for (offset, value) in buffer.take(n).enumerate() {
+            // # Safety
+            //
+            // The invariants of this function are a superset of read,
+            // and guarantee the read are valid (or at least forward req to caller)
+            //
+            // buffer writing won't panic because we require buffer to at least have space for n elements
+            unsafe { *value = Self::read(pointer.wrapping_add(offset * step), width) }
+        }
+    }
+
+    unsafe fn write_n<'a, I>(pointer: *mut u8, width: AccessWidth, n: usize, buffer: I)
+    where
+        I: Iterator<Item = &'a u64> {
+        let step = width.bytes();
+
+        // # Safety
+        //
+        // The invariants of this function are a superset of write,
+        // and guarantee the write are valid (or at least forward req to caller)
+        //
+        // value[offset] won't panic because we require value to at least have n elements
+        for (offset, value) in buffer.take(n).enumerate() {
+            unsafe {
+                Self::write(pointer.wrapping_add(offset * step), width, *value);
+            }
+        }
+    }
+
     unsafe fn copy(source: *const u8, destination: *mut u8, len: usize) {
         // Backwards-case, see comment of `copy`
         if (destination as usize) > (source as usize)

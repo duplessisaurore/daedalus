@@ -272,6 +272,56 @@ pub enum DaedalusCapErrors {
 
     /// A null capability was called
     InvokedNullCap,
+
+    /// Expected an array for `mem_read_n`, but nothing was found on the stack
+    /// This array should be at least n sized.
+    StackUnderflowExpectedReadNArray,
+
+    /// Expected an array for `mem_read_n`, but a different value was supplied
+    /// that isn't an array of uints!
+    ReadNArrayExpected { found_type: &'static str },
+
+    /// The array supplied to `mem_read_n` has fewer than `n` elements
+    /// and isn't valid for the supplied read_n call.
+    ReadNArrayTooShort { len: usize, required: usize },
+
+    /// One of the first `n` values in the `mem_read_n` array is not a UInt
+    /// All of the elements should be in UInt byte-format!
+    ReadNArrayNonUIntByteFormat {
+        index: usize,
+        found_type: &'static str,
+    },
+
+    /// The total number of bytes requested by `mem_read_n` overflows usize
+    /// which is not valid
+    ReadAccessCountOverflow { count: usize, width: usize },
+
+    /// Expected an array for `mem_write_n`, but nothing was found on the stack
+    /// This array should be at least n sized.
+    StackUnderflowExpectedWriteNArray,
+
+    /// Expected an array for `mem_write_n`, but a different value was supplied
+    /// that isn't an array of uints!
+    WriteNArrayExpected { found_type: &'static str },
+
+    /// The array supplied to `mem_write_n` has fewer than `n` elements
+    /// and isn't valid for the supplied writee_n call.
+    WriteNArrayTooShort { len: usize, required: usize },
+
+    /// One of the first `n` values in the `mem_write_n` array is not a UInt
+    /// All of the elements should be in UInt byte-format!
+    WriteNArrayNonUIntByteFormat {
+        index: usize,
+        found_type: &'static str,
+    },
+
+    /// A UInt in `mem_write_n` does not fit in the requested access width
+    /// (overflows the write width)
+    WriteNValueTooWideForAccessWidth { value: u64, width: usize },
+
+    /// The total number of bytes requested by `mem_write_n` overflows usize
+    /// which is not valid
+    WriteAccessCountOverflow { count: usize, width: usize },
 }
 
 impl Display for DaedalusCapErrors {
@@ -630,6 +680,72 @@ impl Display for DaedalusCapErrors {
             ),
             Self::InvokedNullCap => {
                 write!(f, "daedalus found invocation of invalid null cap")
+            }
+            Self::StackUnderflowExpectedReadNArray => {
+                write!(
+                    f,
+                    "daedalus expected a UInt-byte format array for `mem_read_n` on the stack, but nothing was found!"
+                )
+            }
+            Self::ReadNArrayExpected { found_type } => {
+                write!(
+                    f,
+                    "daedalus expected a UInt-byte format array for `mem_read_n`, but instead found a `{found_type}`!"
+                )
+            }
+            Self::ReadNArrayTooShort { len, required } => {
+                write!(
+                    f,
+                    "daedalus expected `mem_read_n` to receive an array with at least `{required}` elements, but only `{len}` were provided!"
+                )
+            }
+            Self::ReadNArrayNonUIntByteFormat { index, found_type } => {
+                write!(
+                    f,
+                    "daedalus expected UInt values in the first `n` elements of the `mem_read_n` array, but found a `{found_type}` at index `{index}`! the array must be in UInt-byte format."
+                )
+            }
+            Self::ReadAccessCountOverflow { count, width } => {
+                write!(
+                    f,
+                    "daedalus attempted `mem_read_n` with `{count}` elements of `{width}` bytes each, but their combined byte length overflows usize!"
+                )
+            }
+            Self::StackUnderflowExpectedWriteNArray => {
+                write!(
+                    f,
+                    "daedalus expected a UInt-byte format array for `mem_write_n` on the stack, but nothing was found!"
+                )
+            }
+            Self::WriteNArrayExpected { found_type } => {
+                write!(
+                    f,
+                    "daedalus expected an array for `mem_write_n`, but instead found a `{found_type}`!"
+                )
+            }
+            Self::WriteNArrayTooShort { len, required } => {
+                write!(
+                    f,
+                    "daedalus expected `mem_write_n` to receive an array with at least `{required}` elements, but only `{len}` were provided!"
+                )
+            }
+            Self::WriteNArrayNonUIntByteFormat { index, found_type } => {
+                write!(
+                    f,
+                    "daedalus expected UInt values in the first `n` elements of the `mem_write_n` array, but found a `{found_type}` at index `{index}`! the array must be in UInt-byte format."
+                )
+            }
+            Self::WriteNValueTooWideForAccessWidth { value, width } => {
+                write!(
+                    f,
+                    "daedalus attempted `mem_write_n` with a value `{value}` that does not fit in the requested access width of `{width}` bytes!"
+                )
+            }
+            Self::WriteAccessCountOverflow { count, width } => {
+                write!(
+                    f,
+                    "daedalus attempted `mem_write_n` with `{count}` elements of `{width}` bytes each, but their combined byte length overflows usize!"
+                )
             }
         }
     }

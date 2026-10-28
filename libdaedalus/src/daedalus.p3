@@ -16,6 +16,15 @@
 // recieved ipc value
 @object IPCReturn (value: Any, tag: CallerHandle)
 
+// read permissions
+@global const REGION_READ: UInt = 0b10u
+
+// write permissions
+@global const REGION_WRITE: UInt = 0b10u
+
+// rw permissions
+@global const REGION_READ_WRITE: UInt = 0b11u
+
 // = IPC = //
 
 @fn block_call(arg: Any, name: String) -> IPCReturn
@@ -220,3 +229,4 @@
     return IrqHandle(b3<Tag> {
         !daedalus_inner::irq::irq_register { !std::get interrupt_id }
     })
+

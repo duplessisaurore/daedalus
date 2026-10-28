@@ -27,16 +27,18 @@
 @capability cap_mem_len 12
 @capability cap_mem_read 13
 @capability cap_mem_write 14
-@capability cap_is_region_handle 15
-@capability cap_mem_copy 16
-@capability cap_mem_fill 17
-@capability cap_mem_flush 18
+@capability cap_mem_read_n 15
+@capability cap_mem_write_n 16
+@capability cap_is_region_handle 17
+@capability cap_mem_copy 18
+@capability cap_mem_fill 19
+@capability cap_mem_flush 20
 
 // Irq
-@capability cap_is_irq_handle 19
-@capability cap_irq_release 20
-@capability cap_irq_ack 21
-@capability cap_irq_register 22
+@capability cap_is_irq_handle 21
+@capability cap_irq_release 22
+@capability cap_irq_ack 23
+@capability cap_irq_register 24
 
 // = IPC = //
 
@@ -161,6 +163,30 @@
     $value
     call.cap cap_mem_write
 @end
+
+
+// ## mem::mem_read_n <values> <n> <width> <offset> <region>
+//
+// returns: [<top> `values`]
+@macro mem::mem_read_n (values, n, width, offset, region)
+    $region
+    $offset
+    $width
+    $n
+    $values
+    call.cap cap_mem_read_n
+@end
+
+// ## mem::mem_write_n <values> <n> <width> <offset> <region>
+@macro mem::mem_write_n (values, n, width, offset, region)
+    $region
+    $offset
+    $width
+    $n
+    $values
+    call.cap cap_mem_write_n
+@end
+
 
 // ## mem::is_region_handle <region>
 //

@@ -49,6 +49,8 @@ pub fn all<H: HeapAllocator, T: TagGenerator>() -> vec::Vec<DaedalusCapabilityFn
         mem::cap_mem_len,
         mem::cap_mem_read,
         mem::cap_mem_write,
+        mem::cap_mem_read_n,
+        mem::cap_mem_write_n,
         mem::cap_is_region_handle,
         mem::cap_mem_copy,
         mem::cap_mem_fill,

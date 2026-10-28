@@ -367,6 +367,133 @@ pub fn cap_mem_read<H: HeapAllocator, T: TagGenerator>(
     Ok(())
 }
 
+
+/// = `mem_read_n`
+///
+/// Reads `n` values of `width` bytes from a region
+/// into an existing array without allocating a temporary buffer
+///
+/// Stack:
+///
+///     [<top> `values`, `n`, `width`, `offset`, `region`]
+///
+/// Output:
+///
+///     [<top> `values`]
+///
+/// The first `n` elements must be UInt values.
+/// 
+/// The region must carry `R` permissions and this access
+/// for the entire length of the array of width must be valid.
+pub fn cap_mem_read_n<H: HeapAllocator, T: TagGenerator>(
+    virtual_machine: &mut DaedalusVm<H, T>,
+) -> Result<(), Box<dyn Error>> {
+    // Should be a values array here for reading into
+    let values = virtual_machine
+        .pop_maybe()
+        .ok_or(DaedalusCapErrors::StackUnderflowExpectedReadNArray)?;
+
+    let Value::Array(index) = values else {
+        return Err(DaedalusCapErrors::ReadNArrayExpected {
+            found_type: value_type_name(&values),
+        }
+        .into());
+    };
+
+    let n = pop_region_length(virtual_machine)?;
+    let width = pop_access_width(virtual_machine)?;
+    let offset = pop_region_offset(virtual_machine)?;
+    let region = pop_region(virtual_machine)?;
+
+    let len = n.checked_mul(width.bytes()).ok_or(
+        DaedalusCapErrors::ReadAccessCountOverflow {
+            count: n,
+            width: width.bytes(),
+        },
+    )?;
+
+    // Make sure our access is valid
+    let pointer = region.resolve_without_checking_alignment(
+        offset,
+        len,
+        RegionPermissions::R,
+    )?;
+
+    // Alignment should also be valid for the width
+    if n != 0 && (pointer as usize) % width.bytes() != 0 {
+        return Err(DaedalusCapErrors::Misaligned {
+            address: pointer as usize,
+            width: width.bytes(),
+        }
+        .into());
+    }
+
+    // get our array mutably off the heap for writing to
+    let HeapItem::Array(fields) =
+        virtual_machine.heap.get_item_mut(index)
+    else {
+        return Err(DaedalusCapErrors::ReadNArrayExpected {
+            found_type: "invalid heap reference for inputted array!",
+        }
+        .into());
+    };
+
+    // Ensure at least n elements exist
+    if fields.len() < n {
+        return Err(DaedalusCapErrors::ReadNArrayTooShort {
+            len: fields.len(),
+            required: n,
+        }
+        .into());
+    }
+
+    // Validate that the first n elements are UInts
+    for (i, field) in fields.iter().take(n).enumerate() {
+        if !matches!(field, Value::UInt(_)) {
+            return Err(DaedalusCapErrors::ReadNArrayNonUIntByteFormat {
+                index: i,
+                found_type: value_type_name(field),
+            }
+            .into());
+        }
+    }
+
+    if n != 0 {
+        // Get a mutable 
+        let buffer = fields[..n].iter_mut().map(|field| {
+            let Value::UInt(value) = field else {
+                unreachable!("array elements already validated to all be uints!");
+            };
+
+            value
+        });
+
+        // SAFETY:
+        //
+        // All first n elements have been validated as UInts
+        // 
+        // The region's permissions, bounds and alignment have
+        // been checked. 
+        //
+        // The iterator yields exactly n mutable references to 
+        // valid u64 values, which means the buffer has enough space!
+        unsafe {
+            TargetMemoryArch::read_n(
+                pointer,
+                width,
+                n,
+                buffer,
+            );
+        }
+    }
+
+    // Put back our modified array.
+    virtual_machine.stack.push(Value::Array(index));
+
+    Ok(())
+}
+
+
 /// = `mem_write`
 ///
 /// Writes an aligned value at some `offset` in a `region`
@@ -423,6 +550,140 @@ pub fn cap_mem_write<H: HeapAllocator, T: TagGenerator>(
 
     Ok(())
 }
+
+
+/// = `mem_write_n`
+///
+/// Writes `n` values of `width` bytes from an array
+/// into the supplied region.
+///
+/// Stack:
+///
+///     [<top> `values`, `n`, `width`, `offset`, `region`]
+///
+/// All arguments are consumed on success.
+///
+/// The array must contain at least `n` elements.
+/// 
+/// The first `n` elements must be UInt values.
+///
+/// The region must carry `W` permissions.
+pub fn cap_mem_write_n<H: HeapAllocator, T: TagGenerator>(
+    virtual_machine: &mut DaedalusVm<H, T>,
+) -> Result<(), Box<dyn Error>> {
+    // Array for writing values out of
+    let values = virtual_machine
+        .pop_maybe()
+        .ok_or(DaedalusCapErrors::StackUnderflowExpectedWriteNArray)?;
+
+    let Value::Array(index) = values else {
+        return Err(DaedalusCapErrors::WriteNArrayExpected {
+            found_type: value_type_name(&values),
+        }
+        .into());
+    };
+
+    let n = pop_region_length(virtual_machine)?;
+    let width = pop_access_width(virtual_machine)?;
+    let offset = pop_region_offset(virtual_machine)?;
+    let region = pop_region(virtual_machine)?;
+    
+    let len = n.checked_mul(width.bytes()).ok_or(
+        DaedalusCapErrors::WriteAccessCountOverflow {
+            count: n,
+            width: width.bytes(),
+        },
+    )?;
+
+   // Make sure our access is valid
+    let pointer = region.resolve_without_checking_alignment(
+        offset,
+        len,
+        RegionPermissions::W,
+    )?;
+
+    // Alignment should also be valid for the width
+    if n != 0 && (pointer as usize) % width.bytes() != 0 {
+        return Err(DaedalusCapErrors::Misaligned {
+            address: pointer as usize,
+            width: width.bytes(),
+        }
+        .into());
+    }
+
+    // Obtain the existing array from the heap, we read values off of this
+    let HeapItem::Array(fields) =
+        virtual_machine.heap.get_item(index)
+    else {
+        return Err(DaedalusCapErrors::WriteNArrayExpected {
+            found_type: "invalid heap reference for inputted array!",
+        }
+        .into());
+    };
+
+    // Ensure at least n elements exist
+    if fields.len() < n {
+        return Err(DaedalusCapErrors::WriteNArrayTooShort {
+            len: fields.len(),
+            required: n,
+        }
+        .into());
+    }
+
+    // Validate that the first n elements are UInts that are valid in this width.
+    for (i, field) in fields.iter().take(n).enumerate() {
+        let Value::UInt(value) = field else {
+            return Err(DaedalusCapErrors::WriteNArrayNonUIntByteFormat {
+                index: i,
+                found_type: value_type_name(field),
+            }
+            .into());
+        };
+
+        // Must also be less than the max value for this current width.
+        if *value > width.max_value() {
+            return Err(DaedalusCapErrors::WriteNValueTooWideForAccessWidth {
+                value: *value,
+                width: width.bytes(),
+            }
+            .into());
+        }
+    }
+
+    if n == 0 {
+        return Ok(());
+    }
+
+    // Our buffer which we are reading from..
+    let buffer = fields[..n].iter().map(|field| {
+        let Value::UInt(value) = field else {
+            unreachable!("array elements already validated");
+        };
+
+        value
+    });
+
+    // SAFETY:
+    //
+    // All first n elements have been validated as UInts
+    // 
+    // The region's permissions, bounds and alignment have
+    // been checked. 
+    //
+    // The iterator yields exactly n references to 
+    // valid u64 values, which means the buffer has enough elements.
+    unsafe {
+        TargetMemoryArch::write_n(
+            pointer,
+            width,
+            n,
+            buffer,
+        );
+    }
+
+    Ok(())
+}
+
 
 /// = `is_region_handle`
 ///

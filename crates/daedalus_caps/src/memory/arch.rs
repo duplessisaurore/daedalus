@@ -23,6 +23,24 @@ pub trait MemoryArch {
     /// The `width` and `pointer` must also be correctly aligned.
     unsafe fn read(pointer: *const u8, width: AccessWidth) -> u64;
 
+    /// Read n `width` bytes at the address supplied by `pointer` into
+    /// the supplied buffer
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that the current execution state (program)
+    /// has actual access to the data specified by `pointer` with `width`
+    /// and `n`.
+    ///
+    /// This access must be with `Read` permissions (`R`).
+    ///
+    /// The `width` and `pointer` must also be correctly aligned.
+    ///
+    /// `buffer` must have at least be takeable for `n` at max access width.
+    unsafe fn read_n<'a, I>(pointer: *const u8, width: AccessWidth, n: usize, buffer: I)
+    where
+        I: Iterator<Item = &'a mut u64>;
+
     /// Write some `width` bytes specified by `value` to the address specified by `pointer`
     ///
     /// # Safety
@@ -34,6 +52,24 @@ pub trait MemoryArch {
     ///
     /// The `width` and `pointer` must also be correctly aligned.
     unsafe fn write(pointer: *mut u8, width: AccessWidth, value: u64);
+
+    /// Write n `width` bytes specified by each element of `value` to the
+    /// address specified by `pointer`
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that the current execution state (program)
+    /// has actual access to the data specified by `pointer` with `width` and
+    /// `n`
+    ///
+    /// This access must be with `Write` permissions (`W`).
+    ///
+    /// The `width` and `pointer` must also be correctly aligned.
+    ///
+    /// `value` must at least have n elements.
+    unsafe fn write_n<'a, I>(pointer: *mut u8, width: AccessWidth, n: usize, buffer: I)
+    where
+        I: Iterator<Item = &'a u64>;
 
     /// Copy some `len` bytes over from address at `source` to the address at `destination`
     ///
