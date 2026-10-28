@@ -24,7 +24,7 @@
     }
     return
 
-@fn wasm_call(output_capacity: UInt, input_bytes: Array[UInt], operation_uint: UInt, should_abort: Bool, instance: InstanceHandle) -> WASMReturn
+@fn wasm_call(instance: InstanceHandle, output_capacity: UInt, input_bytes: Array[UInt], operation_uint: UInt, should_abort: Bool) -> WASMReturn
     let handle = instance.handle
     b3<Void> {
         !daedalus_wasm_inner::wasm::wasm_call

@@ -17,7 +17,7 @@
 @object IPCReturn (value: Any, tag: CallerHandle)
 
 // read permissions
-@global const REGION_READ: UInt = 0b10u
+@global const REGION_READ: UInt = 0b01u
 
 // write permissions
 @global const REGION_WRITE: UInt = 0b10u
@@ -162,6 +162,32 @@
             { !std::get handle }
     }
     return
+
+@fn mem_read_n(values: Array[UInt], n: UInt, width: UInt, offset: UInt, region: RegionHandle) -> Void
+    let handle = region.handle
+    b3<Array> {
+        !daedalus_inner::mem::mem_read_n
+            { !std::get values }
+            { !std::get n }
+            { !std::get width }
+            { !std::get offset }
+            { !std::get handle }
+    }
+    return
+
+
+@fn mem_write_n(values: Array[UInt], n: UInt, width: UInt, offset: UInt, region: RegionHandle) -> Void
+    let handle = region.handle
+    b3<Void> {
+        !daedalus_inner::mem::mem_write_n
+            { !std::get values }
+            { !std::get n }
+            { !std::get width }
+            { !std::get offset }
+            { !std::get handle }
+    }
+    return
+
 
 @fn is_region_handle(region: RegionHandle) -> Bool
     let handle = region.handle
