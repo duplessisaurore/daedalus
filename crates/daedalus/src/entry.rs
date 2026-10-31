@@ -92,6 +92,9 @@ pub extern "C" fn rust_entry(_previous_stage_x0: u64) -> ! {
         initialise_zero_bss();
         initialise_stack_guard();
 
+        // Extra setup if requested.
+        TargetMemoryArch::post_bss_setup();
+
         // Set up IRQs
         TargetIRQArch::setup();
     }

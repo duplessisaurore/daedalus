@@ -6,6 +6,10 @@
 .global _start
 .section .text._start, "ax"
 _start:
+    // Don't take exceptions yet until we manually setup IRQ's under
+    // irq arch
+    msr daifset, #0xf
+
     // Whatever the previous stage left in x0, for future usage if needed?
     mov x19, x0
 

@@ -6,6 +6,10 @@
 
 use crate::memory::arch::{AccessWidth, MemoryArch};
 
+#[cfg(not(feature="aarch64-mmu-disabled"))]
+#[path = "aarch64_mmu.rs"]
+mod mmu;
+
 /// right shift required for reading the level of coherency
 /// out of the CLIDR_EL1 register
 const CLIDR_LOC_SHIFT: u64 = 24;
@@ -87,6 +91,10 @@ const HCR_EL2_TGE: u64 = 1 << 27;
 /// for our EVT to route them to `Daedalus`.
 const HCR_EL2_IMO: u64 = 1 << 4;
 
+/// The mask on SCTLR_ELx If the MMU is enabled or
+/// not at the current ELx level
+const SCTLR_MMU: u64 = 1;
+
 /// The `AArch64` memory operations
 ///
 /// These are for `ARM 64-bit` platforms
@@ -166,6 +174,27 @@ fn assert_elx() {
     }
 }
 
+/// The mmu must not be enabled at the entry point to daedalus at
+/// the EL level that daedalus is executing at
+///
+/// Else partially through building the translation map we may explode
+/// because of old mappings (uh oh)
+/// 
+/// TODO: make daedalus support MMU enabled on entry, out of time... 
+fn assert_mmu_off() {
+    let sctlr: u64;
+
+    unsafe {
+        match read_current_el() {
+            1 => core::arch::asm!("mrs {}, sctlr_el1", out(reg) sctlr, options(nomem, nostack)),
+            2 => core::arch::asm!("mrs {}, sctlr_el2", out(reg) sctlr, options(nomem, nostack)),
+            _ => unreachable!(),
+        }
+    }
+
+    assert!(sctlr & SCTLR_MMU == 0, "daedalus must be ran with the MMU disabled on entry");
+}
+
 fn set_sctlr_elx_icache() {
     // Enable instruction caching with `SCTLR_ELx`
     let mut system_control: u64;
@@ -232,6 +261,169 @@ fn set_sctlr_elx_icache() {
             );
         },
     }
+}
+
+/// Clean and invalidate all the data caches at all layers down
+/// to the LOC through sets / ways of each cache level.
+/// 
+/// This will also invalidate all instruction caches 
+unsafe fn clean_invalidate_all_caches() {
+    // cache level id, for identifying the LOC
+    let clidr: u64;
+
+    // we also need to check if FEAT_CCIDX is enabled
+    // which means that cssidr_el1 contains a different format
+    // for num sets https://arm.jonpalmisc.com/latest_sysreg/AArch64-ccsidr_el1
+    let mmfr2: u64;
+
+    // store the old csselr to reset back after our setup (just incase)
+    let old_csselr: u64;
+
+    // read out our registers
+    unsafe {
+        // initial dsb sy to sync everything because we are about to explode the cache
+        core::arch::asm!("dsb sy", options(nostack, preserves_flags));
+
+        core::arch::asm!("mrs {}, clidr_el1", out(reg) clidr, options(nomem, nostack, preserves_flags));
+        core::arch::asm!("mrs {}, id_aa64mmfr2_el1", out(reg) mmfr2, options(nomem, nostack, preserves_flags));
+        core::arch::asm!("mrs {}, csselr_el1", out(reg) old_csselr, options(nomem, nostack, preserves_flags));
+    }
+
+    // level of coherency, we need to clear down to this
+    let loc = ((clidr >> CLIDR_LOC_SHIFT) & CLIDR_LOC_MASK) as usize;
+
+    // check if CCIDX is enabled
+    // this is when id_aa64mmfr2_el1 bits [23:20] == 0b0001
+    // https://fooptrvoid.github.io/arm-mra-2024-12-sysreg/AArch64-id_aa64mmfr2_el1.html#fieldset_0-23_20
+    let ccidx = ((mmfr2 >> FEAT_CCIDX_SHIFT) & FEAT_CCIDX_MASK) == FEAT_CCIDX_ENABLED;
+
+    // we need to clear all levels down to level of coherency
+    for level in 0..loc {
+        // from bit 0 in clidr, we have 3 bits per cache lvel
+        let cache_type = (clidr >> (level * BITS_PER_CTYPE)) & CTYPE_MASK;
+
+        // Ctype<n>	Meaning
+        // 0b000	No cache.
+        // 0b001	Instruction cache only.
+        // 0b010	Data cache only.
+        // 0b011	Separate instruction and data caches.
+        // 0b100	Unified cache.
+        if !(0b010..=0b100).contains(&cache_type) {
+            continue;
+        }
+
+        // select cache at this level (gets put in csselr_el1 at [3:1])
+        let selection = (level as u64) << 1;
+
+        // read out cssidr, this will tell us the number of
+        // sets in this specific level
+        let ccsidr: u64;
+
+        unsafe {
+            // select level, we isb so further
+            // instructions referes to this new cache level
+            core::arch::asm!(
+                "msr csselr_el1, {}",
+                "isb",
+                in(reg) selection,
+                options(nostack, preserves_flags)
+            );
+
+            core::arch::asm!("mrs {}, ccsidr_el1", out(reg) ccsidr, options(nomem, nostack, preserves_flags));
+        }
+
+        // the associativity/numsets at this level
+        // these are the values - 1
+        let (associativity, num_sets) = if ccidx {
+            (
+                ((ccsidr >> ASSOCIATIVITY_SHIFT) & CCIDX_ASSOCIATIVITY_MASK) as u32,
+                ((ccsidr >> CCIDX_NUM_SETS_SHIFT) & CCIDX_NUM_SETS_MASK) as u32,
+            )
+        } else {
+            (
+                ((ccsidr >> ASSOCIATIVITY_SHIFT) & ASSOCIATIVITY_MASK) as u32,
+                ((ccsidr >> NUM_SETS_SHIFT) & NUM_SETS_MASK) as u32,
+            )
+        };
+
+        // now we have to do the utter insanity that
+        // is the dc cisw arguments:
+
+        // SetWay, bits [31:4]
+
+        // Contains two fields:
+
+        //     Way, bits[31:32-A], the number of the way to operate on.
+        //     Set, bits[B-1:L], the number of the set to operate on.
+
+        // Bits[L-1:4] are RES0.
+
+        // A = Log2(ASSOCIATIVITY), L = Log2(LINELEN), B = (L + S), S = Log2(NSETS).
+
+        // ASSOCIATIVITY, LINELEN (line length, in bytes), and NSETS (number of sets) have their usual meanings and are the values for the cache level being operated on. The values of A and S are rounded up to the next integer.
+        // Level, bits [3:1]
+
+        // Cache level to operate on, minus 1. For example, this field is 0 for operations on L1 cache, or 1 for operations on L2 cache.
+        // Bit [0]
+
+        // Reserved, RES0.
+
+        // we shift the set L left, which is log2(linelen),
+        // line size in CSSIDR is log2(line bytes) - 4
+        let set_shift = ((ccsidr & LINE_SIZE_MASK) as u32) + 4;
+
+        // A = ceil(log2(number of ways))
+        // amount to shift way = 32 - A
+        // which is essentially leading number of bits in associativity
+        // because 32 - (bits in number of ways)
+        let way_shift = associativity.leading_zeros();
+
+        // clear all sets and ways
+        for set in (0..=num_sets).rev() {
+            for way in (0..=associativity).rev() {
+                // Way, bits[31:32-A]
+                let way_bits = (way as u64) << way_shift;
+
+                // Set, bits[B-1:L]
+                let set_bits = (set as u64) << set_shift;
+
+                // Level, bits [3:1], same as for putting in
+                // CSSELR_EL1 so nothing to do there
+                let set_ways = way_bits | set_bits | selection;
+
+                unsafe {
+                    core::arch::asm!("dc cisw, {}", in(reg) set_ways, options(nostack, preserves_flags));
+                }
+            }
+        }
+
+        // make sure all previous mem instructions are complete before
+        // next cache level
+        unsafe {
+            core::arch::asm!("dsb sy", options(nostack, preserves_flags));
+        }
+    }
+
+    unsafe {
+        // restore original csselr_el1
+        core::arch::asm!(
+            "msr csselr_el1, {}",
+            "isb",
+            in(reg) old_csselr,
+            options(nostack, preserves_flags)
+        );
+
+        // ensure everything is complete
+        core::arch::asm!("dsb sy", options(nostack, preserves_flags));
+
+        // invalidate instruction cache too everywhere
+        core::arch::asm!("ic ialluis", options(nostack, preserves_flags));
+
+        // final syncs
+        core::arch::asm!("dsb sy", options(nostack, preserves_flags));
+        core::arch::asm!("isb", options(nostack, preserves_flags));
+    }
+
 }
 
 impl MemoryArch for Aarch64 {
@@ -376,189 +568,53 @@ impl MemoryArch for Aarch64 {
         }
     }
 
-    /// The setup for aarch64 involves these steps:
-    ///
-    /// Generally we can't exactly trust the stage before `Daedalus`
-    /// to not accidentally leave things in cache while `Daedalus` operates
-    /// in a state with the MMU off.
-    ///
-    /// The issue with this is that `Daedalus`'s stores because we r currently
-    /// in Device-nGnRnE memory everywhere we just bypass all caches and write
-    /// straight out to DRAM.
-    ///
-    /// Later when the cache evicts the lines from the prior stage, this overwrites
-    /// our stuff ! bad :(
-    ///
-    /// So we need to first clean and invalidate all data cache lines before `Daedalus`
-    /// and then we can begin with our execution!
-    ///
-    /// We also flush the entirety of the instruction cache with `ic ialluis`
-    /// and then set the `I` field in `SCTLR_ELx` to enable the instruction cache such
-    /// that our interpreter yoinking can be a lot faster execution wise.
     unsafe fn setup() {
         // Assert that we are actually running at a valid ELx on aarch64
+        // and that the MMU is off so when we do our own setup things dont explode.
         assert_elx();
 
-        // cache level id, for identifying the LOC
-        let clidr: u64;
+        #[cfg(not(feature="aarch64-mmu-disabled"))]
+        assert_mmu_off();
 
-        // we also need to check if FEAT_CCIDX is enabled
-        // which means that cssidr_el1 contains a different format
-        // for num sets https://arm.jonpalmisc.com/latest_sysreg/AArch64-ccsidr_el1
-        let mmfr2: u64;
-
-        // store the old csselr to reset back after our setup (just incase)
-        let old_csselr: u64;
-
-        // read out our registers
-        unsafe {
-            // initial dsb sy to sync everything because we are about to explode the cache
-            core::arch::asm!("dsb sy", options(nostack, preserves_flags));
-
-            core::arch::asm!("mrs {}, clidr_el1", out(reg) clidr, options(nomem, nostack, preserves_flags));
-            core::arch::asm!("mrs {}, id_aa64mmfr2_el1", out(reg) mmfr2, options(nomem, nostack, preserves_flags));
-            core::arch::asm!("mrs {}, csselr_el1", out(reg) old_csselr, options(nomem, nostack, preserves_flags));
-        }
-
-        // level of coherency, we need to clear down to this
-        let loc = ((clidr >> CLIDR_LOC_SHIFT) & CLIDR_LOC_MASK) as usize;
-
-        // check if CCIDX is enabled
-        // this is when id_aa64mmfr2_el1 bits [23:20] == 0b0001
-        // https://fooptrvoid.github.io/arm-mra-2024-12-sysreg/AArch64-id_aa64mmfr2_el1.html#fieldset_0-23_20
-        let ccidx = ((mmfr2 >> FEAT_CCIDX_SHIFT) & FEAT_CCIDX_MASK) == FEAT_CCIDX_ENABLED;
-
-        // we need to clear all levels down to level of coherency
-        for level in 0..loc {
-            // from bit 0 in clidr, we have 3 bits per cache lvel
-            let cache_type = (clidr >> (level * BITS_PER_CTYPE)) & CTYPE_MASK;
-
-            // Ctype<n>	Meaning
-            // 0b000	No cache.
-            // 0b001	Instruction cache only.
-            // 0b010	Data cache only.
-            // 0b011	Separate instruction and data caches.
-            // 0b100	Unified cache.
-            if cache_type < 0b001 {
-                continue;
-            }
-
-            // select cache at this level (gets put in csselr_el1 at [3:1])
-            let selection = (level as u64) << 1;
-
-            // read out cssidr, this will tell us the number of
-            // sets in this specific level
-            let ccsidr: u64;
-
-            unsafe {
-                // select level, we isb so further
-                // instructions referes to this new cache level
-                core::arch::asm!(
-                    "msr csselr_el1, {}",
-                    "isb",
-                    in(reg) selection,
-                    options(nostack, preserves_flags)
-                );
-
-                core::arch::asm!("mrs {}, ccsidr_el1", out(reg) ccsidr, options(nomem, nostack, preserves_flags));
-            }
-
-            // the associativity/numsets at this level
-            // these are the values - 1
-            let (associativity, num_sets) = if ccidx {
-                (
-                    ((ccsidr >> ASSOCIATIVITY_SHIFT) & CCIDX_ASSOCIATIVITY_MASK) as u32,
-                    ((ccsidr >> CCIDX_NUM_SETS_SHIFT) & CCIDX_NUM_SETS_MASK) as u32,
-                )
-            } else {
-                (
-                    ((ccsidr >> ASSOCIATIVITY_SHIFT) & ASSOCIATIVITY_MASK) as u32,
-                    ((ccsidr >> NUM_SETS_SHIFT) & NUM_SETS_MASK) as u32,
-                )
-            };
-
-            // now we have to do the utter insanity that
-            // is the dc cisw arguments:
-
-            // SetWay, bits [31:4]
-
-            // Contains two fields:
-
-            //     Way, bits[31:32-A], the number of the way to operate on.
-            //     Set, bits[B-1:L], the number of the set to operate on.
-
-            // Bits[L-1:4] are RES0.
-
-            // A = Log2(ASSOCIATIVITY), L = Log2(LINELEN), B = (L + S), S = Log2(NSETS).
-
-            // ASSOCIATIVITY, LINELEN (line length, in bytes), and NSETS (number of sets) have their usual meanings and are the values for the cache level being operated on. The values of A and S are rounded up to the next integer.
-            // Level, bits [3:1]
-
-            // Cache level to operate on, minus 1. For example, this field is 0 for operations on L1 cache, or 1 for operations on L2 cache.
-            // Bit [0]
-
-            // Reserved, RES0.
-
-            // we shift the set L left, which is log2(linelen),
-            // line size in CSSIDR is log2(line bytes) - 4
-            let set_shift = ((ccsidr & LINE_SIZE_MASK) as u32) + 4;
-
-            // A = ceil(log2(number of ways))
-            // amount to shift way = 32 - A
-            // which is essentially leading number of bits in associativity
-            // because 32 - (bits in number of ways)
-            let way_shift = associativity.leading_zeros();
-
-            // clear all sets and ways
-            for set in (0..=num_sets).rev() {
-                for way in (0..=associativity).rev() {
-                    // Way, bits[31:32-A]
-                    let way_bits = (way as u64) << way_shift;
-
-                    // Set, bits[B-1:L]
-                    let set_bits = (set as u64) << set_shift;
-
-                    // Level, bits [3:1], same as for putting in
-                    // CSSELR_EL1 so nothing to do there
-                    let set_ways = way_bits | set_bits | selection;
-
-                    unsafe {
-                        core::arch::asm!("dc cisw, {}", in(reg) set_ways, options(nostack, preserves_flags));
-                    }
-                }
-            }
-
-            // make sure all previous mem instructions are complete before
-            // next cache level
-            unsafe {
-                core::arch::asm!("dsb sy", options(nostack, preserves_flags));
-            }
-        }
-
-        unsafe {
-            // restore original csselr_el1
-            core::arch::asm!(
-                "msr csselr_el1, {}",
-                "isb",
-                in(reg) old_csselr,
-                options(nostack, preserves_flags)
-            );
-
-            // ensure everything is complete
-            core::arch::asm!("dsb sy", options(nostack, preserves_flags));
-
-            // invalidate instruction cache too everywhere
-            core::arch::asm!("ic ialluis", options(nostack, preserves_flags));
-
-            // final syncs
-            core::arch::asm!("dsb sy", options(nostack, preserves_flags));
-            core::arch::asm!("isb", options(nostack, preserves_flags));
-        }
+        // Previous cache from prior boot stages
+        // may invalidate daedalus's memory on flush or something,
+        // so we first invalidate/clean all of those
+        unsafe { clean_invalidate_all_caches(); }
 
         // Set icache to be active for faster performance.
         set_sctlr_elx_icache();
     }
 
-    /// TODO
-    unsafe fn teardown() {}
+    unsafe fn post_bss_setup() {
+        // Enable the MMU
+        //
+        // this is required else performance is a big :thumbs_down: 
+        // (probably 30x slower.)
+        #[cfg(not(feature="aarch64-mmu-disabled"))]
+        unsafe { mmu::enable(); }
+    }
+
+    unsafe fn teardown() {
+        unsafe {
+            // stop any interupts from occuring so they dont interrupt our teardown process.
+            core::arch::asm!("msr daifset, #0xf", options(nostack, preserves_flags));
+
+            // clean and invalidate all data caches to flush everytihng and make sure its
+            // all visible before we disable the mmu
+            clean_invalidate_all_caches();
+
+            // disable MMU as handoff policy to next stage
+            #[cfg(not(feature="aarch64-mmu-disabled"))]
+            mmu::disable();
+
+            // flush instruction cache one last time to make sure everything is visible
+            // and nothing stale remains
+            core::arch::asm!(
+                "ic ialluis",
+                "dsb sy",
+                "isb",
+                options(nostack, preserves_flags),
+            );
+        }
+    }
 }
