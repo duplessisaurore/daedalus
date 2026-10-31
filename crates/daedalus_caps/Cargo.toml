@@ -28,9 +28,6 @@ irq-gicv2 = []
 
 # platforms
 
-# AArch64, with no mmu support/considered
-aarch64-mmu-disabled = []
-
 # Xilinx
 platform-zynqmp = ["irq-gicv2"]
 platform-zcu106 = ["platform-zynqmp"]

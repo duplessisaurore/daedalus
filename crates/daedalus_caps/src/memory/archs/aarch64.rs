@@ -6,7 +6,7 @@
 
 use crate::memory::arch::{AccessWidth, MemoryArch};
 
-#[cfg(not(feature="aarch64-mmu-disabled"))]
+
 #[path = "aarch64_mmu.rs"]
 mod mmu;
 
@@ -573,7 +573,7 @@ impl MemoryArch for Aarch64 {
         // and that the MMU is off so when we do our own setup things dont explode.
         assert_elx();
 
-        #[cfg(not(feature="aarch64-mmu-disabled"))]
+        
         assert_mmu_off();
 
         // Previous cache from prior boot stages
@@ -590,7 +590,7 @@ impl MemoryArch for Aarch64 {
         //
         // this is required else performance is a big :thumbs_down: 
         // (probably 30x slower.)
-        #[cfg(not(feature="aarch64-mmu-disabled"))]
+        
         unsafe { mmu::enable(); }
     }
 
@@ -604,7 +604,7 @@ impl MemoryArch for Aarch64 {
             clean_invalidate_all_caches();
 
             // disable MMU as handoff policy to next stage
-            #[cfg(not(feature="aarch64-mmu-disabled"))]
+            
             mmu::disable();
 
             // flush instruction cache one last time to make sure everything is visible
