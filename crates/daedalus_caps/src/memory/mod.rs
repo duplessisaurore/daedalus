@@ -32,6 +32,12 @@ unsafe extern "C" {
 /// all the `Daedalus` memory ops.
 pub mod arch;
 
+/// Platform specific configuration options
+/// for platform specific elements.
+/// 
+/// This is generally used by an `arch`.
+pub mod plats;
+
 /// A unique memory region's tag handle which is
 /// associated with some region
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Clone, Copy)]
@@ -58,6 +64,14 @@ pub struct Region {
 
     /// The kind of memory belonging to this region
     kind: RegionMemKind,
+}
+
+/// Some base and length of a Grant
+/// into real memory with daedalus in mind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct GrantBounds {
+    pub base: usize,
+    pub len: usize
 }
 
 impl Region {
@@ -205,14 +219,16 @@ fn overlaps_daedalus(base: usize, len: usize) -> bool {
     base < end && start < base.saturating_add(len)
 }
 
-/// Resolves a manifest `Grant` into a `Region`
-///
+
+/// Resolves the physical upper and lower bounds of a Grant in the current memory
+/// of the current board like start + length
+/// 
 /// This can only be done at runtime as the concrete start/end
 /// of daedalus cannot be known.
-///
-/// This will ensure that either the `Region` does not `W` overlap, otherwise
+/// 
+/// This will ensure that the `Region` does not `W` overlap daedalus, otherwise
 /// erroring if it does.
-pub fn resolve_grant(grant: &Grant) -> Result<Region, DaedalusCapErrors> {
+pub fn resolve_grant_bounds(grant: &Grant) -> Result<GrantBounds, DaedalusCapErrors> {
     let daedalus_start = (&raw const __daedalus_start) as usize;
     let daedalus_end = (&raw const __daedalus_end) as usize;
     let dram_end = (&raw const __dram_end) as usize;
@@ -247,6 +263,18 @@ pub fn resolve_grant(grant: &Grant) -> Result<Region, DaedalusCapErrors> {
             }
         };
 
+    Ok(GrantBounds { base, len })
+}
+
+/// Resolves a manifest `Grant` into a `Region`
+///
+/// This can only be done at runtime as the concrete start/end
+/// of daedalus cannot be known.
+///
+/// This will ensure that the `Region` does not `W` overlap daedalus, otherwise
+/// erroring if it does.
+pub fn resolve_grant(grant: &Grant) -> Result<Region, DaedalusCapErrors> {
+    let GrantBounds { base, len } = resolve_grant_bounds(grant)?;
     Region::new(base, len, grant.perms, grant.kind)
 }
 

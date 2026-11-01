@@ -20,11 +20,16 @@ daedalus_program = { workspace = true }
 daedalus_wasm = { workspace = true, optional = true }
 
 [target.'cfg(target_arch = "aarch64")'.dependencies]
-aarch64-paging = { workspace = true, optional = true}
+aarch64-paging = { workspace = true, features = ["alloc"] }
 
 [features]
 # wasm
 wasm = ["daedalus_wasm", "daedalus_program/wasm"]
+
+# same as `daedalus` extra-debug
+# required for specific mmu mappings on aarch64 of device
+# memory on the required ones for debug
+extra-debug = []
 
 # irq archs
 irq-gicv2 = []

@@ -27,7 +27,7 @@ chrono = "0.4.45"
 full-trace = ["extra-debug"]
 
 # Panic debug, read very carefully before enabling!
-extra-debug = []
+extra-debug = ["daedalus_caps/extra-debug"]
 
 # Supported platforms
 

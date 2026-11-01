@@ -76,6 +76,12 @@ struct Phase {
 #[serde(deny_unknown_fields)]
 struct GrantSpec {
     role: String,
+
+    // This is just used for debugging, serde skips this and we add
+    // it later to hold grants accountable to their program.
+    #[serde(skip)]
+    program: String,
+
     base: GrantBaseSpec,
     len: GrantLenSpec,
     perms: RegionPermissionsSpec,
@@ -83,7 +89,7 @@ struct GrantSpec {
 }
 
 /// See `GrantBase`
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone, Copy)]
 #[serde(untagged)]
 pub enum GrantBaseSpec {
     Absolute(usize),
@@ -98,7 +104,7 @@ pub enum GrantBaseKeyword {
 }
 
 /// See `RegionMemKind`
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "snake_case")]
 pub enum RegionMemKindSpec {
     Memory,
@@ -146,7 +152,7 @@ pub enum RegionPermissionsSpec {
 }
 
 /// See `GrantLen`
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone, Copy)]
 #[serde(untagged)]
 pub enum GrantLenSpec {
     Bytes(usize),
@@ -211,7 +217,61 @@ pub enum InterruptTrigger {
     Edge,
 }
 
-/// Converts the name to it's Image struct name
+/// Attempt to grab an absolute grant range from the grant spec.
+/// 
+/// This will return a range of the (base, len) of this grant spec if it is some
+/// (etc. grant base/len are both absolute) otherwise None.
+/// 
+/// Validates the grant doesn't overflow usize on this device (else comptime will fail)
+/// this may not apply to the target device but whatever
+fn absolute_grant_range(grant: &GrantSpec) -> Option<(usize, usize)> {
+    match (grant.base, grant.len) {
+        (GrantBaseSpec::Absolute(base), GrantLenSpec::Bytes(len)) => {
+            let end = base.checked_add(len).unwrap_or_else(|| {
+                panic!(
+                    "program `{}`: grant `{}` overflows possible address space",
+                    grant.program, grant.role
+                )
+            });
+            Some((base, end))
+        }
+        _ => None,
+    }
+}
+
+/// Validates all grants to meet following requirements:
+/// 
+/// - Grants which overlap must be of the same kind, even across programs
+/// as it doesn't make sense for one program to have Device somewhere and Memory
+/// somewhere else since we consider direct access to memory always
+fn validate_grants(grants: &[GrantSpec]) {
+
+    // validate overlap
+    for (index, first) in grants.iter().enumerate() {
+        // this grant cant be checked at comptime
+        let Some((first_start, first_end)) = absolute_grant_range(first) else {
+            continue;
+        };
+
+        // check against all other grants O(n^2) but at comptime so who cares
+        for second in &grants[index + 1..] {
+            // this grant cant be checked at comptime
+            let Some((second_start, second_end)) = absolute_grant_range(second) else {
+                continue;
+            };
+
+            // any overlap must have the same kind
+            if first.kind != second.kind && first_start < second_end && second_start < first_end {
+                panic!(
+                    "conflicting memory types: program `{}` grant `{}` ({:?}) overlaps program `{}` grant `{}` ({:?}) but has a differing memory kind! shared physical memory must have the same kind!",
+                    first.program, first.role, first.kind, second.program, second.role, second.kind,
+                );
+            }
+        }
+    }
+}
+
+// Converts the name to it's Image struct name
 pub fn to_image_struct_name(name: &str) -> String {
     format!("{}Image", name.to_uppercase())
 }
@@ -493,6 +553,10 @@ fn main() {
     // The seen set of names, a duplicate program name is not permitted
     let mut seen = HashSet::new();
 
+    // All grants, we store this for later to check for conflicts/etc prematurely
+    // during comptime instead of relying on runtime
+    let mut grants = Vec::new();
+
     #[cfg(feature = "wasm")]
     // All of the seen wasm programs, which we need to track to make sure
     // they actually exist by the end
@@ -611,6 +675,10 @@ fn main() {
                 grant.role,
             )
             .unwrap();
+
+            // track grant for later
+            grant.program = manifest.name.clone();
+            grants.push(grant);
         }
         grants_table_literal.push(']');
 
@@ -709,6 +777,10 @@ fn main() {
         )
         .unwrap();
     }
+
+    // check grants for any overlap issues (e.g normal mem with should be mmio mem)
+    // or something bleh bleh bleh haha jonathan gas leak
+    validate_grants(&grants);
 
     output.push_str(&image_structs_out);
 
@@ -819,6 +891,23 @@ fn main() {
     ",
         arms
     ));
+
+    // give a reference to all programs as an array, this is useful if anything
+    // requires enumerating all programs rather than only getting specific ones.
+    let all_programs = seen
+        .iter()
+        .map(|name| to_program_const_name(name))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    writeln!(
+        output,
+        "pub static ALL_PROGRAMS: &[&Program<StaticDaedalusImageVariants>] = &[
+            {}
+        ];",
+        all_programs
+    )
+    .unwrap();
 
     // Grab the template to make the actual program phases
     let template: Template = toml::from_str(
