@@ -164,8 +164,7 @@ pub trait MemoryArch {
     unsafe fn setup();
 
     /// Extra-optional setup function for this architecture's
-    /// memory operations after the BSS has been zero'd out and
-    /// stack guard has been initialised
+    /// memory operations after the allocator has been setup for daedalus.
     /// 
     /// # Safety
     ///
@@ -174,7 +173,7 @@ pub trait MemoryArch {
     ///
     /// The caller must ensure that `Daedalus` only ever runs on one core at
     /// once.
-    unsafe fn post_bss_setup();
+    unsafe fn with_alloc_setup();
 
     /// Teardown this specific architecture.
     ///

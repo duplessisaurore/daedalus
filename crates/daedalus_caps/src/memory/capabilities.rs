@@ -357,7 +357,7 @@ pub fn cap_mem_read<H: HeapAllocator, T: TagGenerator>(
     // with the width and everything is met !
     let pointer = region.resolve(offset, width.bytes(), RegionPermissions::R)?;
 
-    // SAFETY:
+    // # Safety
     //
     // This read is already validated in terms of alignment and permissions
     // within the region system by the above `resolve`.
@@ -468,7 +468,7 @@ pub fn cap_mem_read_n<H: HeapAllocator, T: TagGenerator>(
             value
         });
 
-        // SAFETY:
+        // # Safety
         //
         // All first n elements have been validated as UInts
         // 
@@ -542,7 +542,7 @@ pub fn cap_mem_write<H: HeapAllocator, T: TagGenerator>(
     // Validate the permissions/access for this offset in the region.
     let pointer = region.resolve(offset, width.bytes(), RegionPermissions::W)?;
 
-    // SAFETY:
+    // # Safety
     //
     // This write is already validated in terms of alignment and permissions
     // within the region system by the above `resolve`.
@@ -663,7 +663,7 @@ pub fn cap_mem_write_n<H: HeapAllocator, T: TagGenerator>(
         value
     });
 
-    // SAFETY:
+    // # Safety
     //
     // All first n elements have been validated as UInts
     // 
@@ -755,7 +755,7 @@ pub fn cap_mem_copy<H: HeapAllocator, T: TagGenerator>(
         return Ok(());
     }
 
-    // SAFETY:
+    // # Safety
     //
     // These writes have already been validated in terms permissions
     // and ranges within the region system by the above `resolve_without_alignment`s.
@@ -813,7 +813,7 @@ pub fn cap_mem_fill<H: HeapAllocator, T: TagGenerator>(
         return Ok(());
     }
 
-    // SAFETY:
+    // # Safety
     //
     // These writes have already been validated in terms permissions
     // and ranges within the region system by the above `resolve_without_alignment`s.
@@ -854,7 +854,7 @@ pub fn cap_mem_flush<H: HeapAllocator, T: TagGenerator>(
         return Ok(());
     }
 
-    // SAFETY:
+    // # Safety
     //
     // This flush has already been validated in terms permissions
     // and ranges within the region system by the above `resolve_without_alignment`.

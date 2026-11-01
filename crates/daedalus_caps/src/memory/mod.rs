@@ -20,6 +20,9 @@ unsafe extern "C" {
 
     /// The ending point of memory
     static __dram_end: u8;
+
+    /// The starting point of memory
+    static __dram_start: u8;
 }
 
 /// Generic abstraction layer trait

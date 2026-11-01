@@ -91,17 +91,29 @@ pub extern "C" fn rust_entry(_previous_stage_x0: u64) -> ! {
         // Initialise sections (before we initialise the heap allocator)
         initialise_zero_bss();
         initialise_stack_guard();
-
-        // Extra setup if requested.
-        TargetMemoryArch::post_bss_setup();
-
-        // Set up IRQs
-        TargetIRQArch::setup();
     }
 
     // Initialise the heap, so we can use allocated structures
     // (lepton3 uses these heavily.)
     heap::initialise_heap();
+
+    // # Safety
+    //
+    // All of these operations are ran only once, on the entry to `Daedalus`.
+    //
+    // We assume that `Daedalus` is running in a single-core environment, and
+    // the same preconditions for all specific-arch stuff are met.
+    unsafe {
+        // Extra setup if requested.
+        //
+        // # Safety
+        //
+        // This is done after heap is initialised, bss is zero'd etc.
+        TargetMemoryArch::with_alloc_setup();
+
+        // Set up IRQs
+        TargetIRQArch::setup();
+    }
 
     #[cfg(feature = "extra-debug")]
     extra_debug::debug_start();

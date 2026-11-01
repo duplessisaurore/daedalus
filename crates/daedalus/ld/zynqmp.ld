@@ -55,6 +55,7 @@ SECTIONS
     . = ALIGN(4096);
     __daedalus_end = .;
 
+    __dram_start = ORIGIN(RAM);
     __dram_end = ORIGIN(RAM) + LENGTH(RAM);
 
     ASSERT(__daedalus_end <= __dram_end,

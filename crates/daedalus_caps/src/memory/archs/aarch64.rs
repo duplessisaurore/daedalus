@@ -585,7 +585,7 @@ impl MemoryArch for Aarch64 {
         set_sctlr_elx_icache();
     }
 
-    unsafe fn post_bss_setup() {
+    unsafe fn with_alloc_setup() {
         // Enable the MMU
         //
         // this is required else performance is a big :thumbs_down: 

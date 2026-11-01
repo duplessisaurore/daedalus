@@ -19,6 +19,9 @@ lepton3 = { workspace = true }
 daedalus_program = { workspace = true }
 daedalus_wasm = { workspace = true, optional = true }
 
+[target.'cfg(target_arch = "aarch64")'.dependencies]
+aarch64-paging = { workspace = true, optional = true}
+
 [features]
 # wasm
 wasm = ["daedalus_wasm", "daedalus_program/wasm"]

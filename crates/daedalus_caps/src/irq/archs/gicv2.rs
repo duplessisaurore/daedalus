@@ -668,7 +668,7 @@ unsafe fn install_exception_vectors() {
     let el = read_current_el();
 
     match el {
-        // SAFETY:
+        // # Safety
         //
         // We are dropped off at `el3`, and `VBAR_EL3` is writeable
         // at EL3.
@@ -681,7 +681,7 @@ unsafe fn install_exception_vectors() {
             );
         },
 
-        // SAFETY:
+        // # Safety
         //
         // We are dropped off at `el2`, and `VBAR_EL2` is writeable
         // at EL2.
@@ -694,7 +694,7 @@ unsafe fn install_exception_vectors() {
             );
         },
 
-        // SAFETY:
+        // # Safety
         //
         // We are dropped off at `el1`, and `VBAR_EL1` is writeable
         // at EL1.

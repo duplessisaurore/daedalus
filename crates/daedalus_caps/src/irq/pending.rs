@@ -65,7 +65,7 @@ pub unsafe fn record_pending_interrupt(interrupt_id: u32) {
 /// environment of `Daedalus`.
 #[must_use]
 pub unsafe fn pending_any() -> bool {
-    // SAFETY:
+    // # Safety
     // This is just a simple volatile read of pending count, which should
     // be fine because we are only in one core env
     unsafe { (&raw const PENDING_COUNT).read_volatile() != 0 }
@@ -94,12 +94,15 @@ pub unsafe fn pending_any() -> bool {
 /// be able to route the interrupts used back to the programs,
 /// which is only possible in the normal context!
 pub fn drain_pending_into_buf(buf: &mut [u32; TOTAL_POSSIBLE_SIMULTANEOUS_INTERRUPTS]) -> usize {
-    // SAFETY: stored state is restored below
+    // # Safety 
+    // 
+    // stored state is restored below
     let interrupt_state = unsafe { TargetIRQArch::disable_interrupts() };
 
-    // SAFETY: interrupts masked, so we
-    // cant be interrupted mid op and get inconsistent state between
-    // `PENDING_COUNT` and `PENDING_INTERRUPTS` :)
+    // # Safety 
+    // 
+    // interrupts masked, so we cant be interrupted mid op and get 
+    // inconsistent state between `PENDING_COUNT` and `PENDING_INTERRUPTS` :)
     let count = unsafe {
         let count = (&raw const PENDING_COUNT).read_volatile();
         let base = (&raw const PENDING_INTERRUPTS).cast::<u32>();
@@ -112,7 +115,9 @@ pub fn drain_pending_into_buf(buf: &mut [u32; TOTAL_POSSIBLE_SIMULTANEOUS_INTERR
         count
     };
 
-    // SAFETY: restoring the state saved above
+    // # Safety 
+    // 
+    // restoring the state saved above
     unsafe { TargetIRQArch::restore_interrupts(interrupt_state) };
 
     count

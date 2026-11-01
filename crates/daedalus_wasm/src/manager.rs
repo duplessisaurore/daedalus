@@ -189,7 +189,7 @@ impl WasmManager {
         let compiled = match self.compiled.entry(module.name) {
             hashbrown::hash_map::Entry::Occupied(occupied_entry) => occupied_entry.into_mut(),
             hashbrown::hash_map::Entry::Vacant(vacant_entry) => {
-                // SAFETY:
+                // # Safety
                 //
                 // We already validated the module at build time.
                 unsafe {
