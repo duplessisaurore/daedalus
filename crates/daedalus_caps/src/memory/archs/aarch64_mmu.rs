@@ -95,7 +95,7 @@ const IRGN0: u64 = 0b01 << 8;
 /// Outer Cacheability attribute for memory associated with translation table walks
 /// 
 /// 0b01 = Normal memory, Inner Write-Back Read-Allocate Write-Allocate Cacheable.
-const ORGN0: u64 = 0b01 << 8;
+const ORGN0: u64 = 0b01 << 10;
 
 /// SH0 [13:12]
 /// Shareability attribute for memory associated with translation table walks 
