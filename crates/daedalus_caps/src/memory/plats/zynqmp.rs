@@ -16,7 +16,7 @@ pub const EXTRA_DEVICE_SPANS: &'static [ExtraDeviceSpan] = &[
     #[cfg(feature = "extra-debug")]
     ExtraDeviceSpan {
         base: DEBUG_UART_BASE,
-        size: DEBUG_UART_SIZE
+        len: DEBUG_UART_SIZE
     }
     
 ];

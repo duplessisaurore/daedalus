@@ -6,7 +6,6 @@
 
 use crate::memory::arch::{AccessWidth, MemoryArch};
 
-
 #[path = "aarch64_mmu.rs"]
 mod mmu;
 
@@ -67,10 +66,6 @@ const IMINLINE_SHIFT: u64 = 0;
 
 /// Mask for the actual line size for the IMINLINE/DMINLINE shifts
 const LINE_MASK: u64 = 0xf;
-
-/// This is the `I` flag of the `SCTLR_ELx` registers, setting this
-/// to 1 will enable the instruction cache.
-const SCTLR_INSTRUCTION_CACHE: u64 = 1 << 12;
 
 /// This is the E2H bit of the `HCR_EL2` register
 ///
@@ -179,8 +174,8 @@ fn assert_elx() {
 ///
 /// Else partially through building the translation map we may explode
 /// because of old mappings (uh oh)
-/// 
-/// TODO: make daedalus support MMU enabled on entry, out of time... 
+///
+/// TODO: make daedalus support MMU enabled on entry, out of time...
 fn assert_mmu_off() {
     let sctlr: u64;
 
@@ -192,81 +187,16 @@ fn assert_mmu_off() {
         }
     }
 
-    assert!(sctlr & SCTLR_MMU == 0, "daedalus must be ran with the MMU disabled on entry");
-}
-
-fn set_sctlr_elx_icache() {
-    // Enable instruction caching with `SCTLR_ELx`
-    let mut system_control: u64;
-
-    // The specific register needs to be set based on current_el
-    let current_el: u64 = read_current_el();
-
-    match current_el {
-        3 => unsafe {
-            // Read the current value out, as we only want to enable
-            // the instruction cache
-            core::arch::asm!(
-                "mrs {}, sctlr_el3",
-                out(reg) system_control,
-                options(nomem, nostack, preserves_flags)
-            );
-        },
-
-        2 => unsafe {
-            core::arch::asm!(
-                "mrs {}, sctlr_el2",
-                out(reg) system_control,
-                options(nomem, nostack, preserves_flags)
-            );
-        },
-
-        _ => unsafe {
-            core::arch::asm!(
-                "mrs {}, sctlr_el1",
-                out(reg) system_control,
-                options(nomem, nostack, preserves_flags)
-            );
-        },
-    }
-
-    // Set flag and write back
-    system_control |= SCTLR_INSTRUCTION_CACHE;
-
-    match current_el {
-        3 => unsafe {
-            core::arch::asm!(
-                "msr sctlr_el3, {}",
-                "isb",
-                in(reg) system_control,
-                options(nostack, preserves_flags)
-            );
-        },
-
-        2 => unsafe {
-            core::arch::asm!(
-                "msr sctlr_el2, {}",
-                "isb",
-                in(reg) system_control,
-                options(nostack, preserves_flags)
-            );
-        },
-
-        _ => unsafe {
-            core::arch::asm!(
-                "msr sctlr_el1, {}",
-                "isb",
-                in(reg) system_control,
-                options(nostack, preserves_flags)
-            );
-        },
-    }
+    assert!(
+        sctlr & SCTLR_MMU == 0,
+        "daedalus must be ran with the MMU disabled on entry"
+    );
 }
 
 /// Clean and invalidate all the data caches at all layers down
 /// to the LOC through sets / ways of each cache level.
-/// 
-/// This will also invalidate all instruction caches 
+///
+/// This will also invalidate all instruction caches
 unsafe fn clean_invalidate_all_caches() {
     // cache level id, for identifying the LOC
     let clidr: u64;
@@ -423,7 +353,6 @@ unsafe fn clean_invalidate_all_caches() {
         core::arch::asm!("dsb sy", options(nostack, preserves_flags));
         core::arch::asm!("isb", options(nostack, preserves_flags));
     }
-
 }
 
 impl MemoryArch for Aarch64 {
@@ -472,7 +401,8 @@ impl MemoryArch for Aarch64 {
 
     unsafe fn write_n<'a, I>(pointer: *mut u8, width: AccessWidth, n: usize, buffer: I)
     where
-        I: Iterator<Item = &'a u64> {
+        I: Iterator<Item = &'a u64>,
+    {
         let step = width.bytes();
 
         // # Safety
@@ -573,25 +503,24 @@ impl MemoryArch for Aarch64 {
         // and that the MMU is off so when we do our own setup things dont explode.
         assert_elx();
 
-        
         assert_mmu_off();
 
         // Previous cache from prior boot stages
         // may invalidate daedalus's memory on flush or something,
         // so we first invalidate/clean all of those
-        unsafe { clean_invalidate_all_caches(); }
-
-        // Set icache to be active for faster performance.
-        set_sctlr_elx_icache();
+        unsafe {
+            clean_invalidate_all_caches();
+        }
     }
 
     unsafe fn with_alloc_setup() {
         // Enable the MMU
         //
-        // this is required else performance is a big :thumbs_down: 
+        // this is required else performance is a big :thumbs_down:
         // (probably 30x slower.)
-        
-        unsafe { mmu::enable(); }
+        unsafe {
+            mmu::enable();
+        }
     }
 
     unsafe fn teardown() {
@@ -604,7 +533,6 @@ impl MemoryArch for Aarch64 {
             clean_invalidate_all_caches();
 
             // disable MMU as handoff policy to next stage
-            
             mmu::disable();
 
             // flush instruction cache one last time to make sure everything is visible

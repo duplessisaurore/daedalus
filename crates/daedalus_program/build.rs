@@ -164,6 +164,15 @@ pub enum GrantLenSpec {
 #[serde(rename_all = "snake_case")]
 pub enum GrantLenKeyword {
     ToStartDaedalus,
+
+    // NOTE:
+    //
+    // To end of memory is not to the end of literal memory,
+    // but rather a subset of memory that daedalus considers safe
+    // for use without exploding.
+    //
+    // generally this can end up being a lot smaller than the acutal
+    // memory available, but will exclude regions for device MMIO etc.
     ToEndOfMemory,
 }
 
@@ -623,14 +632,14 @@ fn main() {
         // Build the grants table for this program from it's manifest.
         let mut grants_table_literal = String::from("[");
         let mut seen_grants = HashSet::new();
-        for grant in &manifest.grants {
+        for mut grant in manifest.grants {
             if seen_grants.contains(&grant.role) {
                 panic!(
                     "\x1b[93mprogram `{}`: contains duplicate grants of name {}, this is not permitted\x1b[0m",
                     manifest.name, grant.role,
                 )
             }
-            seen_grants.insert(&grant.role);
+            seen_grants.insert(grant.role.clone());
 
             // Expression for the GrantBase
             let base_expr = match grant.base {

@@ -674,9 +674,9 @@ unsafe fn install_exception_vectors() {
         // at EL3.
         3 => unsafe {
             core::arch::asm!(
-                "msr vbar_el3, {base}",
+                "msr vbar_el3, {}",
                 "isb",
-                base = in(reg) base,
+                in(reg) base,
                 options(nomem, nostack, preserves_flags)
             );
         },
@@ -687,9 +687,9 @@ unsafe fn install_exception_vectors() {
         // at EL2.
         2 => unsafe {
             core::arch::asm!(
-                "msr vbar_el2, {base}",
+                "msr vbar_el2, {}",
                 "isb",
-                base = in(reg) base,
+                in(reg) base,
                 options(nomem, nostack, preserves_flags)
             );
         },
@@ -700,9 +700,9 @@ unsafe fn install_exception_vectors() {
         // at EL1.
         _ => unsafe {
             core::arch::asm!(
-                "msr vbar_el1, {base}",
+                "msr vbar_el1, {}",
                 "isb",
-                base = in(reg) base,
+                in(reg) base,
                 options(nomem, nostack, preserves_flags)
             );
         },

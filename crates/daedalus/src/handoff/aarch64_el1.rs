@@ -26,8 +26,8 @@ pub unsafe fn aarch64_el1_handoff(address: usize) -> ! {
             "dsb sy",
 
             // Jump to the handoff address
-            "br {addr}",
-            addr = in(reg) address,
+            "br {}",
+            in(reg) address,
             options(noreturn, nostack)
         );
     }
