@@ -1,2 +1,0 @@
-[alias]
-zcu106 = "build --features platform-zcu106 --target aarch64-unknown-none-softfloat"
