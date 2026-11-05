@@ -925,7 +925,7 @@ fn main() {
     )
     .unwrap_or_else(|e| panic!("\x1b[93merror parsing {}: {e}\x1b[0m", template_file));
 
-    println!("cargo:rerun-if-env-changed={}", template_file);
+    println!("cargo:rerun-if-changed={}", template_file);
 
     // Duplicate phase names are not permitted
     let mut seen_phases = HashSet::new();
@@ -989,6 +989,15 @@ fn main() {
             "\x1b[93mmissing required program `{:?}`: these were not provided by any referenced daedalus programs\n\nprovided programs: {:?}\x1b[0m",
             required_programs.difference(&seen),
             seen
+        )
+    }
+
+    // The phases must exist in the set of phases
+    if !seen_phases.is_superset(&required_phases) {
+        panic!(
+            "\x1b[93mmissing required phase `{:?}`: these were not provided by any referenced daedalus phase\n\nprovided phases: {:?}\x1b[0m",
+            required_phases.difference(&seen_phases),
+            seen_phases
         )
     }
 

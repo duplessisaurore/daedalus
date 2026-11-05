@@ -401,9 +401,8 @@ fn send_request<H: HeapAllocator, T: TagGenerator>(
 pub fn cap_finish<H: HeapAllocator, T: TagGenerator>(
     virtual_machine: &mut DaedalusVm<H, T>,
 ) -> Result<(), Box<dyn Error>> {
-    // Get the argument off the stack, this is the argument to the next phase.
-    // TODO: on end phase, use this as address to jump to, to start the actual
-    // OS
+    // Get the argument off the stack, this is the argument to the next phase or
+    // for handoff what we jump to
     let argument = virtual_machine
         .pop_maybe()
         .ok_or(DaedalusCapErrors::StackUnderflowFinishArg)?;

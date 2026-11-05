@@ -42,7 +42,7 @@ pub unsafe fn record_pending_interrupt(interrupt_id: u32) {
     unsafe {
         // Read the current number of items in `PENDING_INTERRUPTS`
         let count = (&raw const PENDING_COUNT).read_volatile();
-        debug_assert!(count < TOTAL_POSSIBLE_SIMULTANEOUS_INTERRUPTS);
+        assert!(count < TOTAL_POSSIBLE_SIMULTANEOUS_INTERRUPTS);
 
         // Add to `PENDING_INTERRUPTS`, this is safe because we are only
         // one core, with the assumption of the dedup above
